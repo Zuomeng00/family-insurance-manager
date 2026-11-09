@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # 单张保单的附件数量上限，默认 10
     max_attachments_per_policy: int = 10
 
+    # ---- v1.8 消息通知 ----
+    # 是否启用「每日提醒」后台任务（关掉后仍可手动点「发送测试」，便于排障）
+    notification_scheduler: bool = True
+
     @property
     def database_url(self) -> str:
         """返回 SQLAlchemy 使用的数据库连接串。"""

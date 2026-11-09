@@ -56,7 +56,7 @@ RUN mkdir -p /app/data
 
 # ---- OCI 标准镜像元数据 ----
 LABEL org.opencontainers.image.title="family-insurance-manager" \
-      org.opencontainers.image.version="1.2.0" \
+      org.opencontainers.image.version="1.8.0" \
       org.opencontainers.image.description="家庭保险整理工具：本地优先的家庭保单登记、售后信息归档、电子保单 PDF 归集、年化保费计算与看板统计" \
       org.opencontainers.image.source="https://example.local/family-insurance-manager" \
       org.opencontainers.image.licenses="MIT" \

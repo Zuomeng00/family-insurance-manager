@@ -25,6 +25,10 @@
 
 ![家庭成员](docs/screenshots/demo/members.png)
 
+**通知设置** — 企业微信机器人，保险快到期 / 该缴费时每天提醒一次
+
+![通知设置](docs/screenshots/demo/settings.png)
+
 ### 能力清单
 
 | 模块 | 能力 |
@@ -35,6 +39,7 @@
 | 售后信息 | 每张保单可记录服务顾问（姓名 / 电话 / 微信 / 邮箱）、保险公司联系电话、投保渠道（名称 / 电话）；填写时有「常用值」历史提示 |
 | 批量编辑 | 列表多选后一次性更新售后信息，**只覆盖显式填写的字段**（留空 = 不改，另可显式「设为空」） |
 | 电子保单 PDF | 上传 / 在线查看 / 下载 / 删除 PDF 附件，随保单归档；单文件 ≤20MB、每张保单 ≤10 个 |
+| 消息提醒 | **企业微信机器人**每日推送一条汇总消息：保障即将到期（可设提前天数）+ 缴费临近 / 已逾期；可自定义发送时间，当天只发一次 |
 | 计算口径 | 年化保费、总缴费期数、已缴期数、累计已缴、剩余期数、是否缴清、缴费进度、是否在保、下次缴费日 |
 
 ---
@@ -86,12 +91,47 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `ATTACHMENTS_DIR` | `./data/attachments` | 电子保单 PDF 落盘目录（默认与数据库同源在 `./data/` 下） |
 | `MAX_ATTACHMENT_SIZE` | `20971520`（20MB） | 单个附件大小上限（字节） |
 | `MAX_ATTACHMENTS_PER_POLICY` | `10` | 单张保单附件数量上限 |
+| `NOTIFICATION_SCHEDULER` | `true` | 是否启用「每日提醒」后台任务（关掉后仍可手动发测试） |
 
 > 例：临时用独立数据库与端口启动：`DB_PATH=./data/demo.db PORT=8123 uvicorn app.main:app`（Windows PowerShell 用 `$env:DB_PATH=...; $env:PORT=...`）。
 
 ---
 
-## 三、Docker 部署
+## 三、到期提醒（企业微信机器人）
+
+保险快到期、该缴费的时候，让它自己来找你——每天一条汇总消息推到微信。
+
+### 1. 先拿到 Webhook 地址
+
+企业微信 → 进入要接收提醒的群（建议单独拉一个只有自己的群）→ 右上角「…」→ 群机器人 → 添加机器人 → 起个名字 → **复制 Webhook 地址**（形如 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx`）。
+
+### 2. 在工具里填上
+
+打开「**通知设置**」→ 粘贴 Webhook → 打开「启用每日提醒」→ 设定两类提醒的提前天数与发送时间 → 保存。
+
+- **保障即将到期**：距离保障结束还有 N 天时提醒；「终身」保单不会到期，不参与此类提醒。
+- **缴费临近 / 已逾期**：下次缴费日在 N 天内、或已过缴费日却还没标记「已缴」时提醒（逾期超过 60 天不再重复提醒，避免变成噪音）。
+- **每天最多一条汇总消息**，不逐单轰炸；当天只发一次，服务重启也不会重发。
+- 点「**立即发送测试**」可马上验证配置是否生效（会先保存当前表单，再发一条）。
+
+### 3. 它是怎么"到点"的
+
+应用启动时起一个常驻后台任务，每分钟判断一次「是否已到发送时间 + 今天是否已发过」。网络或配置异常只记日志，**不影响应用正常使用**。
+
+> 只有当天确实存在待提醒项时才会发消息：既没有临近到期、也没有待缴时不会发空消息。
+> 时间口径用**服务器本地时间**（容器内默认 `Asia/Shanghai`）。
+
+### 安全与隐私
+
+Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
+
+- 数据库里存完整地址，但**接口只回传 `key=****末4位`**，页面上永远看不到完整 key（把脱敏值原样提交会被后端拒绝，避免覆盖真实 key）；
+- 后端只接受 `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...` 这一种地址，防止被配成任意 URL 去访问内网；
+- 提醒消息只含产品名、公司、被保人姓名、金额与日期，**不含证件号、手机号等敏感信息**。
+
+---
+
+## 四、Docker 部署
 
 ### 极空间 NAS 部署
 
@@ -99,11 +139,13 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 **镜像已经打包好并发布到本仓库的 Release**（无需安装 Docker）：
 
-- 下载：**[v1.7.0 Release](https://github.com/M1aaa/family-insurance-manager/releases/tag/v1.7.0)**
-  → 附件 `family-insurance-manager-1.7.0-amd64.tar`（157.5 MB，linux/amd64）
-- 本地构建产物：`dist/family-insurance-manager-1.7.0-amd64.tar`
-- sha256: `ffdf954bd22e59ad3fd54beb0ea1a4c9f3b625173715a0bd47b383c69bb03e7f`
-- 镜像: `family-insurance-manager:1.7.0`
+- 下载：**[v1.8.0 Release](https://github.com/M1aaa/family-insurance-manager/releases/tag/v1.8.0)**
+  → 附件 `family-insurance-manager-1.8.0-amd64.tar`（150.3 MB，linux/amd64）
+- 本地构建产物：`dist/family-insurance-manager-1.8.0-amd64.tar`（157,562,880 字节）
+- sha256: `371e74e2a88d978c3a5236f7650262a878e087cab206ec3dee52e60f0f40e025`
+- 镜像: `family-insurance-manager:1.8.0`
+
+> 想回滚到 v1.7：[v1.7.0 Release](https://github.com/M1aaa/family-insurance-manager/releases/tag/v1.7.0)（`ffdf954b…`）。
 
 > 仓库本身不存放大文件（GitHub 单文件上限 100 MB），**镜像统一发布到 Releases**。
 > 每个版本的 tar 作为对应 tag 的附件上传，下载后核对 sha256 再导入。
@@ -154,7 +196,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 四、API 概览
+## 五、API 概览
 
 所有接口位于 `/api` 前缀下，成功直接返回资源对象，错误统一返回
 `{ "code": "...", "message": "...", "detail": ... }`。
@@ -174,30 +216,33 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 | DELETE | `/api/policies/{id}/attachments/{attId}` | 删除单个附件 |
 | GET | `/api/policies/{id}/attachments/{attId}/content` | 附件查看 / 下载（`?disposition=inline\|attachment`，默认 `inline`） |
 | GET | `/api/stats/dashboard` | 看板聚合数据（可选 `today=YYYY-MM-DD`） |
+| GET/PUT | `/api/stats/exclusions` | 读取 / 全量替换「不计入统计」排除配置 |
+| GET/PUT | `/api/notifications/settings` | 读取 / 部分更新通知配置（Webhook 回显已脱敏） |
+| POST | `/api/notifications/test` | 立即发送一条测试消息（不受开关 / 时间限制） |
 
 交互式接口文档：启动后访问 `/docs`（Swagger UI）。
 
 ---
 
-## 五、项目结构
+## 六、项目结构
 
 ```
 保险整理工具/
 ├── app/                # FastAPI 后端（routers / services / models / calc 分层）
 ├── static/             # 无构建前端（index.html + css + js）
-│   ├── js/views/       # dashboard / policies / members 三视图
-│   ├── js/components/  # modal / policyForm / memberForm
+│   ├── js/views/       # dashboard / policies / members / settings 四视图
+│   ├── js/components/  # modal / policyForm / memberForm / batchEditModal …
 │   └── js/             # main(路由) / api / store / format / chart
 ├── tests/              # 后端测试（pytest）
 ├── data/               # 运行期数据目录（数据库 + 附件，运行时生成）
 │   ├── insurance.db    # SQLite 数据库
 │   └── attachments/    # 电子保单 PDF
 ├── docs/               # PRD、架构文档与部署指南
-│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.7，为什么这么改都在这）
+│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.8，为什么这么改都在这）
 ├── scripts/            # 一键构建镜像并导出 tar（build-image.sh / .bat）
 ├── tools/offline-image-build/  # 无 Docker 组装镜像的脚本（step1~step5）
 ├── dist/               # 镜像 tar 产物
-│   └── family-insurance-manager-1.7.0-amd64.tar   # 已预构建好，可直接导入
+│   └── family-insurance-manager-1.8.0-amd64.tar   # 已预构建好，可直接导入
 ├── requirements.txt    # 运行依赖（== 锁定）
 ├── Dockerfile          # 单阶段镜像
 ├── docker-compose.yml        # 极空间运行用（只有 image:）
@@ -207,7 +252,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 六、开发与测试
+## 七、开发与测试
 
 ```bash
 # 安装开发依赖
@@ -221,8 +266,13 @@ pytest -q
 
 ---
 
-## 七、常见问题
+## 八、常见问题
 
 - **端口被占用**：设置 `PORT` 环境变量改用其他端口，或修改 `docker-compose.yml` 的端口映射。
 - **想重置数据**：停止服务后删除 `data/insurance.db`（数据库）与 `data/attachments/`（PDF 附件），下次启动会重新建表。
 - **数据在哪**：都在 `./data/` 下——数据库 `./data/insurance.db`、PDF 附件 `./data/attachments/`（本地或 Docker 宿主机同路径）。
+- **收不到企业微信提醒**：先点「立即发送测试」——
+  - 提示 `Webhook 地址无效或机器人已被移除` → 回群里重新复制地址；
+  - 提示发送成功但群里没消息 → 检查机器人是否被移出群 / 群是否被折叠免打扰；
+  - 测试能发、但到点没发 → 确认「启用每日提醒」已开、且**当天确实有**临近到期或待缴的保单（没有就不发空消息）；容器时区不对也会导致「到点」判断偏移，`docker-compose.yml` 已固定 `TZ=Asia/Shanghai`。
+- **改了提醒天数没生效**：保存后由后台任务在**下一个整分钟**重新判断，不会立刻补发当天消息（当天已发过就不再发）。

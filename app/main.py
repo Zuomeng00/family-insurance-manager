@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -28,7 +30,8 @@ from . import models  # noqa: F401  # 确保 ORM 模型在 create_all 之前被�
 from .config import settings
 from .database import Base, engine
 from .errors import AppError
-from .routers import attachments, members, meta, policies, stats
+from .routers import attachments, members, meta, notifications, policies, stats
+from .services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -125,15 +128,55 @@ def _backfill_policy_insureds() -> None:
         logger.warning("回填 policy_insureds 失败，已跳过", exc_info=True)
 
 
+#: 通知轮询间隔（秒）：每分钟判断一次「是否已到发送时间」，当天最多发一条
+_NOTIFY_POLL_SECONDS = 60
+#: 启动后延迟首次检查：避开建表 / 迁移窗口，也避免服务刚起就发消息
+_NOTIFY_STARTUP_DELAY = 15
+
+
+async def _notification_loop() -> None:
+    """常驻后台任务：到点则发送每日汇总提醒。
+
+    设计约束：
+
+    - 所有业务 / 网络异常都在 ``run_check_safe`` 内部吞掉，**循环本身不退出**；
+    - 同步的 DB 与 HTTP 调用经 ``asyncio.to_thread`` 丢到线程池，不阻塞事件循环；
+    - 是否真的发送由 ``run_daily_check`` 判定（启用开关 / 发送时间 / 当日去重），
+      因此「每分钟无脑轮询」不会造成重复推送。
+    """
+    await asyncio.sleep(_NOTIFY_STARTUP_DELAY)
+    while True:
+        try:
+            await asyncio.to_thread(notification_service.run_check_safe)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - 兜底：任何意外都不允许中断循环
+            logger.warning("通知后台任务异常（已忽略）", exc_info=True)
+        await asyncio.sleep(_NOTIFY_POLL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
-    """应用生命周期：启动时准备目录、自动建表并执行增量迁移。"""
+    """应用生命周期：启动时准备目录、自动建表、执行增量迁移并启动通知任务。"""
     _ensure_data_dir()
     _ensure_attachments_dir()
     Base.metadata.create_all(bind=engine)
     _run_additive_migrations()
     _backfill_policy_insureds()
-    yield
+
+    task: asyncio.Task[None] | None = None
+    if settings.notification_scheduler:
+        task = asyncio.create_task(_notification_loop(), name="notification-daily-check")
+        logger.info("通知后台任务已启动（每 %s 秒检查一次）", _NOTIFY_POLL_SECONDS)
+
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            logger.info("通知后台任务已停止")
 
 
 app = FastAPI(
@@ -194,6 +237,7 @@ app.include_router(members.router)
 app.include_router(policies.router)
 app.include_router(attachments.router)
 app.include_router(stats.router)
+app.include_router(notifications.router)
 
 # ---- 静态资源挂载（务必放在所有 /api 路由之后，避免吞掉 API 请求） ----
 # check_dir=False：目录暂不存在时也不阻塞启动（前端下一批次实现）。

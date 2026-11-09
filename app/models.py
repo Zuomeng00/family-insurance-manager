@@ -270,12 +270,39 @@ class StatsExclusion(Base):
         return f"<StatsExclusion kind={self.kind!r} ref_id={self.ref_id!r}>"
 
 
+class AppSetting(Base):
+    """应用级键值配置（v1.8）。
+
+    仅承载少量**非业务**配置：通知开关、企业微信 Webhook、提醒参数等。
+    不存任何保单/成员数据。
+
+    值为字符串（布尔用 ``"true"/"false"``，整数按其十进制字符串），
+    由 ``notification_service`` 统一解析并提供默认值，避免调用方各自兜底。
+
+    迁移：新表由 ``Base.metadata.create_all`` 自动创建，**无需**登记
+    ``_ADDITIVE_COLUMNS``、**无需**回填（缺键即取默认值）。
+    """
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - 调试用
+        # 注意：不打印 value，避免 Webhook key 出现在日志里
+        return f"<AppSetting key={self.key!r}>"
+
+
 __all__ = [
     "Member",
     "Policy",
     "PolicyInsured",
     "PolicyAttachment",
     "StatsExclusion",
+    "AppSetting",
     "new_member_id",
     "new_policy_id",
     "new_attachment_id",

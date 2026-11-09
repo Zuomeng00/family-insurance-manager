@@ -3,7 +3,7 @@
  *
  * 职责：
  * 1. 预加载枚举字典到 store（全局下拉框字典，只取一次）；
- * 2. 注册 hash 路由（`#/dashboard` 默认 / `#/policies` / `#/members`）并分发到对应视图；
+ * 2. 注册 hash 路由（`#/dashboard` 默认 / `#/policies` / `#/members` / `#/settings`）并分发到对应视图；
  * 3. 绑定全局按钮（顶栏 tab、"+ 新增保单"）；
  * 4. 监听 store 派发的应用级事件：
  *    - `app:toast`   → 渲染轻提示；
@@ -17,12 +17,14 @@ import { createPolicyForm } from './components/policyForm.js';
 import { render as renderDashboard } from './views/dashboard.js';
 import { render as renderPolicies } from './views/policies.js';
 import { render as renderMembers } from './views/members.js';
+import { render as renderSettings } from './views/settings.js';
 
 /** 路由表：hash → { view 容器 id, render 渲染函数 }。 */
 const ROUTES = {
   '#/dashboard': { view: 'view-dashboard', render: renderDashboard },
   '#/policies': { view: 'view-policies', render: renderPolicies },
   '#/members': { view: 'view-members', render: renderMembers },
+  '#/settings': { view: 'view-settings', render: renderSettings, hideNewPolicy: true },
 };
 
 const DEFAULT_ROUTE = '#/dashboard';
@@ -90,6 +92,9 @@ async function route() {
   const config = ROUTES[currentRoute];
   const container = document.getElementById(config.view);
   container.hidden = false;
+  // 「+ 新增保单」是保单 / 成员 / 总览的快捷入口，在设置页无意义 → 隐藏
+  const newPolicyBtn = document.getElementById('btn-new-policy');
+  if (newPolicyBtn) newPolicyBtn.hidden = Boolean(config.hideNewPolicy);
   await config.render(container);
 }
 

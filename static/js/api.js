@@ -220,4 +220,33 @@ export function saveExclusions(payload) {
   return request('/stats/exclusions', { method: 'PUT', body: payload });
 }
 
+// ---- 消息通知（v1.8）----
+
+/**
+ * 读取通知配置。
+ * @returns {Promise<{enabled:boolean, webhook:string, webhookConfigured:boolean,
+ *   expiryEnabled:boolean, expiryDays:number, dueEnabled:boolean, dueDays:number,
+ *   sendTime:string, lastSentDate:string|null, today:string}>}
+ */
+export function getNotifySettings() {
+  return request('/notifications/settings');
+}
+
+/**
+ * 部分更新通知配置（只提交要改的字段；`webhook` 留空 = 不修改）。
+ * @param {Record<string, any>} payload
+ * @returns {Promise<any>} 更新后的完整配置（Webhook 已脱敏）
+ */
+export function saveNotifySettings(payload) {
+  return request('/notifications/settings', { method: 'PUT', body: payload });
+}
+
+/**
+ * 立即发送一条测试消息（不受启用开关 / 发送时间限制）。
+ * @returns {Promise<{sent:boolean, expiring:number, due:number}>}
+ */
+export function sendNotifyTest() {
+  return request('/notifications/test', { method: 'POST' });
+}
+
 export { BASE };

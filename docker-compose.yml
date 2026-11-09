@@ -24,7 +24,7 @@
 services:
   insurance-tool:
     # 导入到极空间的本镜像（导入后镜像名与此一致，不要改）
-    image: family-insurance-manager:1.7.0
+    image: family-insurance-manager:1.8.0
     container_name: family-insurance-manager
 
     ports:

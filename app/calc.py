@@ -54,6 +54,8 @@ class Schedule:
     is_paid_off: bool
     progress_percent: Decimal
     in_coverage: bool
+    #: 保障结束日；``None`` = 终身（不会到期）。用于续保提醒。
+    coverage_end_date: Optional[date]
     next_due_date: Optional[date]
     k_max: int
     # ---------- 缴费记录（手动覆盖）相关 ----------
@@ -275,13 +277,16 @@ def calc_schedule(policy: Any, insured: Any, today: date) -> Schedule:
     progress = pct(paid_periods, total_periods)
     cumulative = money(Decimal(paid_periods) * premium)
 
-    # ---------- 5) 是否在保障期内 ----------
+    # ---------- 5) 是否在保障期内 / 保障结束日 ----------
     if ctt == WHOLE_LIFE:
+        coverage_end: Optional[date] = None  # 终身：无到期日
         in_coverage = True
-    elif ctt == FIXED_YEARS:
-        in_coverage = today <= add_years(eff, int(policy.coverage_term_value))
-    else:  # 至某年龄 A
-        in_coverage = today <= add_years(insured.birth_date, int(policy.coverage_term_value))
+    else:
+        if ctt == FIXED_YEARS:
+            coverage_end = add_years(eff, int(policy.coverage_term_value))
+        else:  # 至某年龄 A
+            coverage_end = add_years(insured.birth_date, int(policy.coverage_term_value))
+        in_coverage = today <= coverage_end
 
     # ---------- 6) 下次缴费日 ----------
     # 定义为「最早未缴期次的应缴日」。手动记录少于应缴时该日期会落在过去，
@@ -300,6 +305,7 @@ def calc_schedule(policy: Any, insured: Any, today: date) -> Schedule:
         is_paid_off=is_paid_off,
         progress_percent=progress,
         in_coverage=in_coverage,
+        coverage_end_date=coverage_end,
         next_due_date=next_due,
         k_max=k_max,
         paid_periods_override=override,

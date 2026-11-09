@@ -343,6 +343,8 @@ class PolicyOut(CamelModel):
     is_paid_off: bool
     progress_percent: Decimal
     in_coverage: bool
+    #: 保障结束日；``None`` = 终身险，不存在续保到期。
+    coverage_end_date: Optional[date] = None
     next_due_date: Optional[date] = None
     #: 仅按时间推算的应缴期数（不含手动记录）
     expected_periods_to_date: int = 0
@@ -590,6 +592,74 @@ class DashboardOut(CamelModel):
     overdue: list[OverdueItemOut] = []
 
 
+# ---------------------------------------------------------------------------
+# v1.8：消息通知（企业微信机器人）
+# ---------------------------------------------------------------------------
+class NotifySettingsIn(CamelModel):
+    """通知配置**部分更新**请求体。
+
+    所有字段可缺省：路由层用 ``model_dump(exclude_unset=True)`` 保证
+    **未传的键一律不改**（避免前端表单漏带字段把配置清空）。
+
+    - ``webhook`` 传空串 = 清除已保存地址；
+    - ``webhook`` 传 ``null`` = 不改动（便于「只改天数」等局部提交）。
+    """
+
+    enabled: Optional[bool] = None
+    webhook: Optional[str] = None
+    expiry_enabled: Optional[bool] = None
+    expiry_days: Optional[int] = Field(default=None, ge=1, le=365)
+    due_enabled: Optional[bool] = None
+    due_days: Optional[int] = Field(default=None, ge=1, le=365)
+    send_time: Optional[str] = None
+
+    @field_validator("send_time")
+    @classmethod
+    def _validate_send_time(cls, value: Optional[str]) -> Optional[str]:
+        """``H:MM`` / ``HH:MM`` → 归一为 ``HH:MM``；非法值直接 422。"""
+        if value is None:
+            return None
+        parts = value.strip().split(":")
+        if len(parts) != 2:
+            raise ValueError("发送时间格式应为 HH:MM")
+        try:
+            hour, minute = int(parts[0]), int(parts[1])
+        except ValueError as exc:
+            raise ValueError("发送时间格式应为 HH:MM") from exc
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError("发送时间须在 00:00–23:59 之间")
+        return f"{hour:02d}:{minute:02d}"
+
+
+class NotifySettingsOut(CamelModel):
+    """通知配置响应体。
+
+    ``webhook`` 为**脱敏值**（``key=****abcd``），真实 key 永不出网；
+    前端回填时留空即表示「不修改」。
+    """
+
+    enabled: bool
+    webhook: str = ""
+    webhook_configured: bool = False
+    expiry_enabled: bool
+    expiry_days: int
+    due_enabled: bool
+    due_days: int
+    send_time: str
+    #: 最近一次成功发送的日期（``YYYY-MM-DD``，空 = 从未发送）
+    last_sent_date: Optional[str] = None
+    #: 服务端当天日期，便于前端判断「今日是否已发送」
+    today: Optional[date] = None
+
+
+class NotifyTestOut(CamelModel):
+    """「立即发送测试」响应体。"""
+
+    sent: bool
+    expiring: int = 0
+    due: int = 0
+
+
 __all__ = [
     "CamelModel",
     "MemberCreate",
@@ -616,4 +686,7 @@ __all__ = [
     "UpcomingItemOut",
     "OverdueItemOut",
     "DashboardOut",
+    "NotifySettingsIn",
+    "NotifySettingsOut",
+    "NotifyTestOut",
 ]

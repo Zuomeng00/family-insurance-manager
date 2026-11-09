@@ -158,6 +158,7 @@ def _to_out(
         is_paid_off=sched.is_paid_off,
         progress_percent=sched.progress_percent,
         in_coverage=sched.in_coverage,
+        coverage_end_date=sched.coverage_end_date,
         next_due_date=sched.next_due_date,
         expected_periods_to_date=sched.expected_periods_to_date,
         overdue_periods=sched.overdue_periods,

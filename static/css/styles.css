@@ -498,6 +498,49 @@ a.attachment-link:hover { text-decoration: underline; }
 .coverage-detail { margin-top: 6px; padding: 8px 10px; background: #f7f9fc; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
 .coverage-detail .coverage-line { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
 
+/* ---------- 通知设置（v1.8） ---------- */
+.notify-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); }
+
+/* 规则行：左侧说明 + 右侧控件；窄屏自动换行，控件不挤压说明文字 */
+.setting-list { display: flex; flex-direction: column; }
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.setting-row:first-child { padding-top: 2px; }
+.setting-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+.setting-main { min-width: 0; flex: 1 1 220px; }
+.setting-title { font-size: 14px; color: var(--text); }
+.setting-desc { margin-top: 2px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.setting-control {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; color: var(--text-muted);
+}
+.setting-input, .setting-time {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; background: #fff; color: var(--text);
+}
+.setting-input { width: 68px; text-align: center; }
+.setting-input:disabled, .setting-time:disabled { background: #f4f6f9; color: #a0a6ad; }
+.notify-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+/* 纯 CSS 开关（不依赖任何 JS 组件） */
+.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track {
+  width: 42px; height: 24px; border-radius: 999px; background: #d5dce6;
+  position: relative; transition: background .18s ease;
+}
+.switch-track::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, .2);
+  transition: transform .18s ease;
+}
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--primary); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: .5; cursor: not-allowed; }
+
 /* ---------- 响应式 ---------- */
 
 /* 中等宽度（平板 / 窄窗口）：6 张卡片折成 2 列 × 3 行（无孤行） */

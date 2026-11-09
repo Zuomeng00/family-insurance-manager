@@ -587,7 +587,7 @@ def test_policy_out_shape_no_attachment_array(client):
 def test_health_version_and_stats(client):
     health = client.get("/api/health")
     assert health.status_code == 200, health.text
-    assert health.json()["version"] == "1.7.0"
+    assert health.json()["version"] == "1.8.0"
 
     holder = _member(client)
     _policy(client, holder["id"])
