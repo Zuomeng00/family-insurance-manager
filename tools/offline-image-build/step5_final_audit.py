@@ -27,7 +27,7 @@ WORK = os.environ.get("IMGBUILD_WORK") or os.path.join(tempfile.gettempdir(), "_
 REPO = os.environ.get("IMGBUILD_REPO") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
-OUT_TAR = os.path.join(REPO, "dist", "family-insurance-manager-1.8.0-amd64.tar")
+OUT_TAR = os.path.join(REPO, "dist", "family-insurance-manager-1.8.1-amd64.tar")
 SP = "usr/local/lib/python3.13/site-packages"
 
 PASS, FAIL, WARN = [], [], []

@@ -22,7 +22,7 @@ WORK = os.environ.get("IMGBUILD_WORK") or os.path.join(tempfile.gettempdir(), "_
 REPO = os.environ.get("IMGBUILD_REPO") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
-OUT_TAR = os.path.join(REPO, "dist", "family-insurance-manager-1.8.0-amd64.tar")
+OUT_TAR = os.path.join(REPO, "dist", "family-insurance-manager-1.8.1-amd64.tar")
 SP = "usr/local/lib/python3.13/site-packages"
 
 PASS, FAIL = [], []
@@ -49,15 +49,15 @@ def main():
     print("  RepoTags =", m["RepoTags"])
     print("  Config   =", m["Config"])
     print("  Layers   = %d 层" % len(m["Layers"]))
-    chk(m["RepoTags"] == ["family-insurance-manager:1.8.0"], "RepoTags 正确")
+    chk(m["RepoTags"] == ["family-insurance-manager:1.8.1"], "RepoTags 正确")
     chk(len(m["Layers"]) == 6, "层数为 6", "实际 %d" % len(m["Layers"]))
 
     cfg_bytes = tf.extractfile(m["Config"]).read()
     chk(hashlib.sha256(cfg_bytes).hexdigest() + ".json" == m["Config"],
         "config 文件名 == 其内容 sha256（镜像 ID 自洽）")
     cfg = json.loads(cfg_bytes)
-    chk(repositories.get("family-insurance-manager", {}).get("1.8.0") is not None,
-        "repositories 含 family-insurance-manager:1.8.0")
+    chk(repositories.get("family-insurance-manager", {}).get("1.8.1") is not None,
+        "repositories 含 family-insurance-manager:1.8.1")
 
     # --- 经典 docker save 的「三件套」完整性：每层必须有 VERSION + json + layer.tar ---
     print("  -- 层目录三件套（VERSION + json + layer.tar）--")
@@ -115,9 +115,9 @@ def main():
 
     # --- repositories 的值必须是「最上层」的摘要（moby save.go 的语义）---
     top = posixpath.dirname(m["Layers"][-1])
-    chk(repositories.get("family-insurance-manager", {}).get("1.8.0") == top,
+    chk(repositories.get("family-insurance-manager", {}).get("1.8.1") == top,
         "repositories 的值 == 最上层目录名（与 moby save.go 一致）",
-        "%r != %r" % (repositories.get("family-insurance-manager", {}).get("1.8.0"), top))
+        "%r != %r" % (repositories.get("family-insurance-manager", {}).get("1.8.1"), top))
 
     print()
     print("=" * 74)
@@ -303,7 +303,7 @@ def main():
     chk(c.get("ExposedPorts") == {"8000/tcp": {}}, "EXPOSE 8000")
     chk(c.get("Healthcheck", {}).get("Test", [None])[0] == "CMD-SHELL", "HEALTHCHECK 为 CMD-SHELL")
     chk(c.get("Healthcheck", {}).get("Interval") == 30_000_000_000, "healthcheck interval 30s")
-    chk(c.get("Labels", {}).get("org.opencontainers.image.version") == "1.8.0", "LABEL version=1.8.0")
+    chk(c.get("Labels", {}).get("org.opencontainers.image.version") == "1.8.1", "LABEL version=1.8.1")
     chk(cfg.get("architecture") == "amd64" and cfg.get("os") == "linux", "平台 linux/amd64")
     env = dict(e.split("=", 1) for e in c.get("Env", []) if "=" in e)
     for k, v in [("PYTHONUNBUFFERED", "1"), ("PYTHONDONTWRITEBYTECODE", "1"), ("PIP_NO_CACHE_DIR", "1"),

@@ -39,7 +39,7 @@
 | 售后信息 | 每张保单可记录服务顾问（姓名 / 电话 / 微信 / 邮箱）、保险公司联系电话、投保渠道（名称 / 电话）；填写时有「常用值」历史提示 |
 | 批量编辑 | 列表多选后一次性更新售后信息，**只覆盖显式填写的字段**（留空 = 不改，另可显式「设为空」） |
 | 电子保单 PDF | 上传 / 在线查看 / 下载 / 删除 PDF 附件，随保单归档；单文件 ≤20MB、每张保单 ≤10 个 |
-| 消息提醒 | **企业微信机器人**每日推送一条汇总消息：保障即将到期（可设提前天数）+ 缴费临近 / 已逾期；可自定义发送时间，当天只发一次 |
+| 消息提醒 | **企业微信机器人**每日推送一条汇总消息（纯文本，**微信里也能直接看**）：保障即将到期（可设提前天数）+ 缴费临近 / 已逾期；可自定义发送时间，当天只发一次 |
 | 计算口径 | 年化保费、总缴费期数、已缴期数、累计已缴、剩余期数、是否缴清、缴费进度、是否在保、下次缴费日 |
 
 ---
@@ -112,6 +112,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 - **保障即将到期**：距离保障结束还有 N 天时提醒；「终身」保单不会到期，不参与此类提醒。
 - **缴费临近 / 已逾期**：下次缴费日在 N 天内、或已过缴费日却还没标记「已缴」时提醒（逾期超过 60 天不再重复提醒，避免变成噪音）。
 - **每天最多一条汇总消息**，不逐单轰炸；当天只发一次，服务重启也不会重发。
+- 消息是**纯文本**（`msgtype=text`）：企业微信和**微信**里都能直接看到内容。
+  这一点是硬约束——企业微信的 `markdown` / 图文 / 文件类消息在微信里只会显示「暂不支持此消息类型」。
 - 点「**立即发送测试**」可马上验证配置是否生效（会先保存当前表单，再发一条）。
 
 ### 3. 它是怎么"到点"的
@@ -139,11 +141,11 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 **镜像已经打包好并发布到本仓库的 Release**（无需安装 Docker）：
 
-- 下载：**[v1.8.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.0)**
-  → 附件 `family-insurance-manager-1.8.0-amd64.tar`（150.3 MB，linux/amd64）
-- 本地构建产物：`dist/family-insurance-manager-1.8.0-amd64.tar`（157,562,880 字节）
-- sha256: `371e74e2a88d978c3a5236f7650262a878e087cab206ec3dee52e60f0f40e025`
-- 镜像: `family-insurance-manager:1.8.0`
+- 下载：**[v1.8.1 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.1)**
+  → 附件 `family-insurance-manager-1.8.1-amd64.tar`（150.3 MB，linux/amd64）
+- 本地构建产物：`dist/family-insurance-manager-1.8.1-amd64.tar`（157,573,120 字节）
+- sha256: `c1467290de2d739322e2b446e0b4ea3333ce38a462a9b04a9f736c48148ec534`
+- 镜像: `family-insurance-manager:1.8.1`
 
 > 想回滚到 v1.7：[v1.7.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.7.0)（`ffdf954b…`）。
 
@@ -242,7 +244,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 ├── scripts/            # 一键构建镜像并导出 tar（build-image.sh / .bat）
 ├── tools/offline-image-build/  # 无 Docker 组装镜像的脚本（step1~step5）
 ├── dist/               # 镜像 tar 产物
-│   └── family-insurance-manager-1.8.0-amd64.tar   # 已预构建好，可直接导入
+│   └── family-insurance-manager-1.8.1-amd64.tar   # 已预构建好，可直接导入
 ├── requirements.txt    # 运行依赖（== 锁定）
 ├── Dockerfile          # 单阶段镜像
 ├── docker-compose.yml        # 极空间运行用（只有 image:）
@@ -274,5 +276,6 @@ pytest -q
 - **收不到企业微信提醒**：先点「立即发送测试」——
   - 提示 `Webhook 地址无效或机器人已被移除` → 回群里重新复制地址；
   - 提示发送成功但群里没消息 → 检查机器人是否被移出群 / 群是否被折叠免打扰；
+  - **微信里只看到「暂不支持此消息类型，点击前往企业微信查看」** → 那是 v1.8.0 的老问题（当时发的是 markdown），升级到 **v1.8.1** 即好——现在发的是纯文本，微信里直接可读；
   - 测试能发、但到点没发 → 确认「启用每日提醒」已开、且**当天确实有**临近到期或待缴的保单（没有就不发空消息）；容器时区不对也会导致「到点」判断偏移，`docker-compose.yml` 已固定 `TZ=Asia/Shanghai`。
 - **改了提醒天数没生效**：保存后由后台任务在**下一个整分钟**重新判断，不会立刻补发当天消息（当天已发过就不再发）。

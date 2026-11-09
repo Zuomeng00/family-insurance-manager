@@ -40,11 +40,11 @@ REPO = os.environ.get("IMGBUILD_REPO") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
 OUT_DIR = os.path.join(REPO, "dist")
-OUT_TAR = os.path.join(OUT_DIR, "family-insurance-manager-1.8.0-amd64.tar")
+OUT_TAR = os.path.join(OUT_DIR, "family-insurance-manager-1.8.1-amd64.tar")
 TMP = os.path.join(WORK, "tmp")
 
 IMAGE_REF = "family-insurance-manager"
-IMAGE_TAG = "1.8.0"
+IMAGE_TAG = "1.8.1"
 EPOCH = 1758038400  # 固定 mtime，保证可复现
 SP = "usr/local/lib/python3.13/site-packages"
 PYBIN = "/usr/local/bin/python3.13"

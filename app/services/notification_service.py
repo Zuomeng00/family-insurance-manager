@@ -7,7 +7,8 @@
    - **保障即将到期**（续保提醒）：距离 ``coverage_end_date`` 不足 N 天；
    - **缴费临近/已逾期**：``next_due_date`` 在 N 天内或已过期。
 3. 每天最多发送**一条汇总消息**（``notify.last_sent_date`` 去重），不逐单轰炸。
-4. 发送使用标准库 ``urllib``，**零新增依赖**。
+4. 发送使用标准库 ``urllib``，**零新增依赖**；消息类型固定 ``text``——
+   ``markdown`` 在微信端不显示（只显示「暂不支持此消息类型」）。
 5. Webhook 只接受企业微信官方地址，避免配置成任意 URL 造成 SSRF。
 6. 任何网络/配置异常都只记录日志、不抛出到启动流程——**通知失败不能影响应用可用性**。
 """
@@ -36,7 +37,12 @@ logger = logging.getLogger(__name__)
 KEY_PREFIX = "notify."
 WEBHOOK_HOST = "qyapi.weixin.qq.com"
 WEBHOOK_PATH = "/cgi-bin/webhook/send"
-MAX_LINES = 20  # 单条消息最多列出的条目数，超出折叠为「还有 N 条」
+
+#: 企业微信 ``text`` 消息 ``content`` 上限 2048 **字节**（UTF-8，一个汉字 3 字节）。
+#: 注意 markdown 是 4096，但 markdown 在微信端不显示（见 ``build_text`` 的说明）。
+MAX_BYTES = 2000
+#: 预留给「未列出」提示与页脚，避免折叠提示本身把消息顶出上限。
+RESERVED_BYTES = 140
 
 DEFAULTS: dict[str, str] = {
     "enabled": "false",
@@ -230,6 +236,15 @@ def update_settings(db: Session, payload: dict[str, Any]) -> NotifySettings:
     if "send_time" in payload:
         changes["send_time"] = _normalize_time(str(payload["send_time"]))
 
+    # 「刚打开开关」≠「服务错过发送时间」，不该立刻补发当天消息。
+    # 否则用户在 13:00 配好、点过「测试」，60 秒内后台任务又推一条同样内容 → 看起来像重发。
+    # 补发语义（服务宕机后补当天）针对的是「本来就开着」，这里用 current.enabled 区分。
+    if changes.get("enabled") == "true" and not current.enabled:
+        effective_send_time = changes.get("send_time", current.send_time)
+        now = datetime.now()
+        if now.strftime("%H:%M") >= effective_send_time and "last_sent_date" not in changes:
+            changes["last_sent_date"] = now.date().isoformat()
+
     _write(db, changes)
     db.commit()
     return get_settings(db)
@@ -352,59 +367,104 @@ def _money(value: Decimal) -> str:
 
 
 def _due_phrase(days_left: int) -> str:
+    """天数的人话描述（纯文本，**不带任何标记**）。"""
     if days_left < 0:
-        return f'<font color="warning">已逾期 {-days_left} 天</font>'
+        return f"已逾期 {-days_left} 天"
     if days_left == 0:
-        return '<font color="warning">今天到期</font>'
+        return "今天到期"
     return f"剩余 {days_left} 天"
 
 
-def build_markdown(
+def _expiry_phrase(days_left: int) -> str:
+    """保障到期的天数描述（已过期不说「逾期」，那是缴费的说法）。"""
+    if days_left < 0:
+        return f"已过期 {-days_left} 天"
+    if days_left == 0:
+        return "今天到期"
+    return f"剩余 {days_left} 天"
+
+
+def _expiry_block(item: ExpiryItem) -> str:
+    who = f"{item.insured_name} · " if item.insured_name else ""
+    return (
+        f"· {who}{item.product_name}（{item.company}）\n"
+        f"  保障至 {item.coverage_end.isoformat()}（{_expiry_phrase(item.days_left)}）"
+    )
+
+
+def _due_block(item: DueItemView) -> str:
+    who = f"{item.insured_name} · " if item.insured_name else ""
+    return (
+        f"· {who}{item.product_name}\n"
+        f"  {item.due_date.isoformat()} 应缴 {_money(item.amount)}（{_due_phrase(item.days_left)}）"
+    )
+
+
+def build_text(
     expiring: list[ExpiryItem],
     dues: list[DueItemView],
     today: date,
 ) -> str:
-    """组装一条企业微信 markdown 消息。"""
-    lines: list[str] = [f"## 家庭保单提醒（{today.isoformat()}）", ""]
+    """组装一条**纯文本**消息（``msgtype=text``）。
+
+    为什么不用 markdown
+    -------------------
+    企业微信群机器人的 ``markdown`` 消息**在微信里不显示**——如果这个群开了
+    「微信互通」，微信端只会看到一行「暂不支持此消息类型，点击前往企业微信查看」，
+    等于提醒白发了。``text`` 是唯一在**微信 / 企业微信两端都能正常显示**的类型。
+
+    代价是丢掉加粗与红色高亮，因此改用「【】分段 + 缩进」表达层级，
+    并对逾期 / 当天到期用文字强调（如「已逾期 3 天」）。
+
+    长度限制
+    --------
+    企业微信 ``text`` 的 ``content`` 上限 **2048 字节**（UTF-8，一个汉字 3 字节），
+    比 markdown 的 4096 更紧。因此按**字节**预算逐条累加，超出后折叠为
+    「……另有 N 条未列出」，保证消息不被接口直接拒绝。
+    """
+    lines: list[str] = [f"家庭保单提醒（{today.isoformat()}）", ""]
+    dropped = 0
+
+    def used_bytes() -> int:
+        # +1：每行末尾的换行符
+        return sum(len(line.encode("utf-8")) + 1 for line in lines)
+
+    def append_block(block: str) -> bool:
+        """按字节预算追加；放不下返回 False（由调用方计入「未列出」）。"""
+        if used_bytes() + len(block.encode("utf-8")) + 1 > MAX_BYTES - RESERVED_BYTES:
+            return False
+        lines.append(block)
+        return True
 
     if expiring:
-        lines.append(f"### 保障即将到期（{len(expiring)} 份）")
-        for item in expiring[:MAX_LINES]:
-            who = f"{item.insured_name} · " if item.insured_name else ""
-            lines.append(
-                f"> {who}{item.product_name}（{item.company}）\n"
-                f"> 保障至 {item.coverage_end.isoformat()}，{_due_phrase(item.days_left)}"
-            )
-        if len(expiring) > MAX_LINES:
-            lines.append(f"> 另有 {len(expiring) - MAX_LINES} 份未列出")
+        append_block(f"【保障即将到期】共 {len(expiring)} 份")
+        for item in expiring:
+            if not append_block(_expiry_block(item)):
+                dropped += 1
         lines.append("")
 
     if dues:
         total = sum((item.amount for item in dues), Decimal("0"))
-        lines.append(f"### 近期应缴费（{len(dues)} 笔，合计 {_money(total)}）")
-        for item in dues[:MAX_LINES]:
-            who = f"{item.insured_name} · " if item.insured_name else ""
-            lines.append(
-                f"> {who}{item.product_name}\n"
-                f"> {item.due_date.isoformat()} 应缴 {_money(item.amount)}，"
-                f"{_due_phrase(item.days_left)}"
-            )
-        if len(dues) > MAX_LINES:
-            lines.append(f"> 另有 {len(dues) - MAX_LINES} 笔未列出")
+        append_block(f"【近期应缴费】共 {len(dues)} 笔，合计 {_money(total)}")
+        for item in dues:
+            if not append_block(_due_block(item)):
+                dropped += 1
         lines.append("")
 
-    lines.append("> 由「家庭保险整理工具」自动发送")
+    if dropped:
+        lines.append(f"……另有 {dropped} 条未列出，请打开工具查看")
+    lines.append("（由「家庭保险整理工具」自动发送）")
     return "\n".join(lines)
 
 
 def send_wechat(webhook: str, content: str, timeout: float = 10.0) -> None:
-    """向企业微信机器人发送 markdown；失败抛 ``AppError``（由调用方决定是否吞掉）。"""
+    """向企业微信机器人发送**纯文本**；失败抛 ``AppError``（由调用方决定是否吞掉）。"""
     url = validate_webhook(webhook)
     if not url:
         raise AppError(422, "VALIDATION_ERROR", "未配置 Webhook 地址", {"field": "webhook"})
 
     payload = json.dumps(
-        {"msgtype": "markdown", "markdown": {"content": content}},
+        {"msgtype": "text", "text": {"content": content}},
         ensure_ascii=False,
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -455,7 +515,7 @@ def run_daily_check(db: Session, now: Optional[datetime] = None) -> dict[str, An
     if not expiring and not dues:
         return {"sent": False, "reason": "nothing_to_send"}
 
-    send_wechat(settings.webhook, build_markdown(expiring, dues, now.date()))
+    send_wechat(settings.webhook, build_text(expiring, dues, now.date()))
     _write(db, {"last_sent_date": now.date().isoformat()})
     db.commit()
     return {
@@ -475,7 +535,7 @@ def send_test(db: Session) -> dict[str, Any]:
     expiring = collect_expiring(db, today, settings.expiry_days)
     dues = collect_due(db, today, settings.due_days)
     if expiring or dues:
-        content = build_markdown(expiring, dues, today)
+        content = build_text(expiring, dues, today)
     else:
         content = (
             f"## 家庭保单提醒（测试）\n\n"

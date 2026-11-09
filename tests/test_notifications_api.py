@@ -5,7 +5,7 @@
 1. ``GET/PUT /api/notifications/settings`` 的默认值、脱敏、部分更新与校验；
 2. **脱敏值回写必须被拒**（否则真实 Webhook key 会被星号覆盖）；
 3. 两类提醒的收集口径：保障到期（终身险跳过）/ 缴费临近与逾期；
-4. ``build_markdown`` 的消息结构；
+4. ``build_text`` 的纯文本结构（**不能含 markdown / HTML 标记**，否则微信端不显示）；
 5. ``run_daily_check`` 的「发送时间 + 当日去重 + 开关」三重判定。
 
 测试全程 **不发起真实网络请求**：``send_wechat`` 一律被 monkeypatch。
@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
@@ -31,6 +32,17 @@ from app.services import notification_service as ns
 
 WEBHOOK = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abcdef123456"
 SETTINGS_URL = "/api/notifications/settings"
+
+
+def _enabled_since_before(db, send_time: str = "00:00"):
+    """把配置置为「早就开着、今天还没发过」。
+
+    ``update_settings`` 对「由关到开且已过发送时间」会顺手把 ``last_sent_date`` 记为今天
+    （避免刚开启就补发），所以那些测试要显式清掉这个标记，模拟「跨天延续的开启状态」。
+    """
+    ns.update_settings(db, {"webhook": WEBHOOK, "enabled": True, "send_time": send_time})
+    ns._write(db, {"last_sent_date": ""})
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -265,36 +277,105 @@ def test_collect_skips_inactive_policy(db_session, member_factory, policy_factor
 # ---------------------------------------------------------------------------
 # 消息组装与发送判定
 # ---------------------------------------------------------------------------
-def test_build_markdown_structure(notified_env):
+def test_build_text_structure(notified_env):
+    """纯文本结构：分段标题 + 缩进明细，两端（微信 / 企业微信）都能显示。"""
     today = date.today()
     expiring = ns.collect_expiring(notified_env, today, 30)
     dues = ns.collect_due(notified_env, today, 7)
-    content = ns.build_markdown(expiring, dues, today)
+    content = ns.build_text(expiring, dues, today)
 
-    assert content.startswith(f"## 家庭保单提醒（{today.isoformat()}）")
-    assert "保障即将到期（1 份）" in content
+    assert content.startswith(f"家庭保单提醒（{today.isoformat()}）")
+    assert "【保障即将到期】共 1 份" in content
     assert "综合意外" in content
-    assert "近期应缴费（1 笔，合计 ¥1,200.00）" in content
+    assert "【近期应缴费】共 1 笔，合计 ¥1,200.00" in content
     assert "百万医疗" in content
     assert "剩余 3 天" in content
-    assert "由「家庭保险整理工具」自动发送" in content
+    assert "（由「家庭保险整理工具」自动发送）" in content
+    # 纯文本：不允许出现 markdown / HTML 标记（微信端会原样显示或直接不显示）
+    for token in ("##", "> ", "<font", "**"):
+        assert token not in content, token
 
 
-def test_build_markdown_truncates_long_list():
-    """超过 20 条时折叠为「另有 N 条未列出」。"""
+def test_build_text_overdue_uses_plain_words():
+    """逾期不用颜色标记，改用文字强调。"""
+    today = date.today()
+    item = ns.DueItemView(
+        product_name="百万医疗",
+        insured_name="张三",
+        due_date=today - timedelta(days=3),
+        days_left=-3,
+        amount=Decimal("1200"),
+    )
+    content = ns.build_text([], [item], today)
+    assert "已逾期 3 天" in content
+    assert "<font" not in content
+
+
+def test_build_text_truncates_by_byte_budget():
+    """条目过多时按**字节**折叠，保证不超过企业微信 text 的 2048 字节上限。"""
     today = date.today()
     many = [
         ns.ExpiryItem(
-            product_name=f"产品{i}",
-            company="某公司",
+            product_name=f"长期重疾保险产品第{i}号",
+            company="某某人寿保险股份有限公司",
             insured_name="张三",
             coverage_end=today + timedelta(days=1),
             days_left=1,
         )
-        for i in range(25)
+        for i in range(40)
     ]
-    content = ns.build_markdown(many, [], today)
-    assert "另有 5 份未列出" in content
+    content = ns.build_text(many, [], today)
+    assert len(content.encode("utf-8")) <= ns.MAX_BYTES
+    assert "另有" in content and "条未列出" in content
+    # 折叠后仍保留了开头几条（不是全丢）
+    assert "第0号" in content
+
+
+def test_send_wechat_uses_text_msgtype(monkeypatch):
+    """必须发 ``msgtype=text``——markdown 在微信端不显示。"""
+    captured: dict = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b'{"errcode": 0, "errmsg": "ok"}'
+
+    def fake_urlopen(request, timeout=10.0):
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr(ns.urllib.request, "urlopen", fake_urlopen)
+    ns.send_wechat(WEBHOOK, "hello")
+    assert captured["body"]["msgtype"] == "text"
+    assert captured["body"]["text"]["content"] == "hello"
+
+
+def test_enabling_after_send_time_does_not_immediately_resend(db_session):
+    """刚打开开关且当天发送时间已过 → 不补发（避免与「测试」按钮重复）。
+
+    补发语义只针对「本来开着、但服务当时没起」。这里把发送时间设成 00:00，
+    即「今天的时间点早已过去」，开启后 ``last_sent_date`` 直接记为今天。
+    """
+    settings = ns.update_settings(
+        db_session,
+        {"webhook": WEBHOOK, "enabled": True, "send_time": "00:00"},
+    )
+    assert settings.enabled is True
+    assert settings.last_sent_date == date.today().isoformat()
+
+
+def test_enabling_before_send_time_still_sends_today(db_session):
+    """发送时间还没到就开启 → 不写「已发送」，当天照常发。"""
+    settings = ns.update_settings(
+        db_session,
+        {"webhook": WEBHOOK, "enabled": True, "send_time": "23:59"},
+    )
+    assert settings.last_sent_date == ""
 
 
 def test_run_daily_check_disabled(notified_env):
@@ -303,7 +384,7 @@ def test_run_daily_check_disabled(notified_env):
 
 def test_run_daily_check_too_early(notified_env, monkeypatch):
     db = notified_env
-    ns.update_settings(db, {"enabled": True, "webhook": WEBHOOK, "send_time": "09:00"})
+    _enabled_since_before(db, "09:00")
     monkeypatch.setattr(ns, "send_wechat", lambda *a, **k: pytest.fail("不应发送"))
     result = ns.run_daily_check(db, datetime.combine(date.today(), time(8, 59)))
     assert result == {"sent": False, "reason": "too_early"}
@@ -311,7 +392,7 @@ def test_run_daily_check_too_early(notified_env, monkeypatch):
 
 def test_run_daily_check_sends_once_per_day(notified_env, monkeypatch):
     db = notified_env
-    ns.update_settings(db, {"enabled": True, "webhook": WEBHOOK, "send_time": "09:00"})
+    _enabled_since_before(db, "09:00")
     sent: list[str] = []
     monkeypatch.setattr(ns, "send_wechat", lambda url, content, timeout=10.0: sent.append(content))
 
@@ -331,7 +412,7 @@ def test_run_daily_check_nothing_to_send(db_session, member_factory, monkeypatch
     """无可提醒项时不发空消息，也不写「已发送」标记。"""
     member_factory(id="m9", name="王五", relation=Relation.father, birth_date=date(1960, 2, 10))
     db_session.commit()
-    ns.update_settings(db_session, {"enabled": True, "webhook": WEBHOOK, "send_time": "00:00"})
+    _enabled_since_before(db_session, "00:00")
     monkeypatch.setattr(ns, "send_wechat", lambda *a, **k: pytest.fail("不应发送"))
 
     result = ns.run_daily_check(db_session, datetime.combine(date.today(), time(12, 0)))
@@ -352,6 +433,8 @@ def test_run_daily_check_respects_switches(notified_env, monkeypatch):
             "due_enabled": False,
         },
     )
+    ns._write(db, {"last_sent_date": ""})
+    db.commit()
     monkeypatch.setattr(ns, "send_wechat", lambda *a, **k: pytest.fail("不应发送"))
     result = ns.run_daily_check(db, datetime.combine(date.today(), time(12, 0)))
     assert result == {"sent": False, "reason": "nothing_to_send"}
