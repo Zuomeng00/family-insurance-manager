@@ -139,13 +139,13 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 **镜像已经打包好并发布到本仓库的 Release**（无需安装 Docker）：
 
-- 下载：**[v1.8.0 Release](https://github.com/M1aaa/family-insurance-manager/releases/tag/v1.8.0)**
+- 下载：**[v1.8.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.0)**
   → 附件 `family-insurance-manager-1.8.0-amd64.tar`（150.3 MB，linux/amd64）
 - 本地构建产物：`dist/family-insurance-manager-1.8.0-amd64.tar`（157,562,880 字节）
 - sha256: `371e74e2a88d978c3a5236f7650262a878e087cab206ec3dee52e60f0f40e025`
 - 镜像: `family-insurance-manager:1.8.0`
 
-> 想回滚到 v1.7：[v1.7.0 Release](https://github.com/M1aaa/family-insurance-manager/releases/tag/v1.7.0)（`ffdf954b…`）。
+> 想回滚到 v1.7：[v1.7.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.7.0)（`ffdf954b…`）。
 
 > 仓库本身不存放大文件（GitHub 单文件上限 100 MB），**镜像统一发布到 Releases**。
 > 每个版本的 tar 作为对应 tag 的附件上传，下载后核对 sha256 再导入。
