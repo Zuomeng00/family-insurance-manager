@@ -25,9 +25,13 @@
 
 ![家庭成员](docs/screenshots/demo/members.png)
 
-**通知设置** — 企业微信机器人，保险快到期 / 该缴费时每天提醒一次
+**设置** — 访问密码（v1.9）+ 企业微信机器人，保险快到期 / 该缴费时每天提醒一次
 
-![通知设置](docs/screenshots/demo/settings.png)
+![设置](docs/screenshots/demo/settings.png)
+
+**访问密码登录页** — 开启后打开网址先输密码，输错有提示、连错会限速
+
+![登录页](docs/screenshots/demo/login.png)
 
 ### 能力清单
 
@@ -40,6 +44,7 @@
 | 批量编辑 | 列表多选后一次性更新售后信息，**只覆盖显式填写的字段**（留空 = 不改，另可显式「设为空」） |
 | 电子保单 PDF | 上传 / 在线查看 / 下载 / 删除 PDF 附件，随保单归档；单文件 ≤20MB、每张保单 ≤10 个 |
 | 消息提醒 | **企业微信机器人**每日推送一条汇总消息（纯文本，**微信里也能直接看**）：保障即将到期（可设提前天数）+ 缴费临近 / 已逾期；可自定义发送时间，当天只发一次 |
+| 访问密码 | 可选开启：打开网址先输密码；密码 PBKDF2 加盐哈希存储、登录态为 HttpOnly Cookie（30 天）、登错 5 次限速 5 分钟；**默认关闭**，忘了密码可用环境变量兜底 |
 | 计算口径 | 年化保费、总缴费期数、已缴期数、累计已缴、剩余期数、是否缴清、缴费进度、是否在保、下次缴费日 |
 
 ---
@@ -92,6 +97,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `MAX_ATTACHMENT_SIZE` | `20971520`（20MB） | 单个附件大小上限（字节） |
 | `MAX_ATTACHMENTS_PER_POLICY` | `10` | 单张保单附件数量上限 |
 | `NOTIFICATION_SCHEDULER` | `true` | 是否启用「每日提醒」后台任务（关掉后仍可手动发测试） |
+| `AUTH_SESSION_DAYS` | `30` | 访问密码登录有效期（天） |
+| `AUTH_DISABLED` | `false` | 设为 `true` 时**强制忽略**访问密码——忘了密码就用它进门 |
 
 > 例：临时用独立数据库与端口启动：`DB_PATH=./data/demo.db PORT=8123 uvicorn app.main:app`（Windows PowerShell 用 `$env:DB_PATH=...; $env:PORT=...`）。
 
@@ -133,7 +140,56 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 ---
 
-## 四、Docker 部署
+## 四、访问密码（v1.9）
+
+默认**关闭**——从旧版本升上来不会突然被锁在门外。要开的时候：**设置 → 访问密码 → 设置密码 → 打开开关**（第一次开启会先要求设密码，不会出现「开了但没锁」）。
+
+### 它保护什么
+
+- 所有 `/api/*` **业务**接口：成员、保单、附件、统计、通知配置；
+- 附件预览 / 下载链接同样受保护（登录 Cookie 随浏览器导航自动携带，不需要额外参数）。
+
+不拦这些（故意的）：
+
+| 不保护的对象 | 为什么 |
+|---|---|
+| `/api/health` | Docker `HEALTHCHECK` 要能探活，带上密码就没法用了 |
+| `/api/meta/enums` | 只是下拉框的枚举字典，没有任何业务数据 |
+| `/api/auth/*` | 登录本身不能要求先登录 |
+| `index.html` / `css` / `js` | 静态文件里没有数据，登录页本身就是它的一部分 |
+
+### 实现要点
+
+| 项 | 做法 |
+|---|---|
+| 密码存储 | `hashlib.pbkdf2_hmac("sha256", …, 200000)` + 16 字节随机盐；库里只有 `pbkdf2_sha256$迭代次数$盐$哈希`，**没有明文** |
+| 登录态 | HMAC-SHA256 签名的**无状态** token（`过期时间.密码版本.签名`），放 **HttpOnly** Cookie，默认 30 天；服务重启不掉线，也不用维护会话表 |
+| 改密码 | 「密码版本」随密码哈希变化 → 已签发的 token 全部失效（等于「退出所有设备」），当前设备自动续签 |
+| 防爆破 | 同一来源 5 分钟内错 5 次 → `429`，锁定期间即使密码正确也拒绝 |
+| 新增依赖 | **零**。`hashlib` / `hmac` / `secrets` 都是标准库（和企业微信通知的取舍一致） |
+
+### 忘了密码怎么办
+
+两条路，**都不用改代码、不用重装**：
+
+1. **临时跳过（推荐）**：在 `docker-compose.yml` 的 `environment` 里加一行 `AUTH_DISABLED=true` → 重启容器 → 直接进入 → 去设置页重设密码 → 删掉这行再重启。
+   设置页会显示「当前由环境变量 AUTH_DISABLED 强制关闭」，不会让你以为密码坏了。
+2. **清掉开关**：直接改库
+
+   ```bash
+   docker exec -it family-insurance-manager python -c "import sqlite3;c=sqlite3.connect('/app/data/insurance.db');c.execute(\"UPDATE app_settings SET value='false' WHERE key='auth.enabled'\");c.commit()"
+   ```
+
+### 几个说明
+
+- **每台设备各自登录一次**（手机 / 平板 / 电脑各 30 天）；换浏览器、清 Cookie 都要重登。
+- 关闭访问密码**不会删掉已保存的密码**，下次想开直接打开开关即可。
+- http 直连的 NAS 也能用：Cookie 没有加 `Secure` 标记——加了就只在 https 下发送，表现为「密码明明对却一直要重登」。
+- 这是「防家里人 / 防顺手翻一翻」的级别，不是堡垒机：http 下同网段抓包仍能看到明文。真要放到公网，请在前面套一层 HTTPS 反向代理。
+
+---
+
+## 五、Docker 部署
 
 ### 极空间 NAS 部署
 
@@ -141,13 +197,13 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 **镜像已经打包好并发布到本仓库的 Release**（无需安装 Docker）：
 
-- 下载：**[v1.8.1 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.1)**
-  → 附件 `family-insurance-manager-1.8.1-amd64.tar`（150.3 MB，linux/amd64）
-- 本地构建产物：`dist/family-insurance-manager-1.8.1-amd64.tar`（157,573,120 字节）
-- sha256: `c1467290de2d739322e2b446e0b4ea3333ce38a462a9b04a9f736c48148ec534`
-- 镜像: `family-insurance-manager:1.8.1`
+- 下载：**[v1.9.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.9.0)**
+  → 附件 `family-insurance-manager-1.9.0-amd64.tar`（150.3 MB，linux/amd64）
+- 本地构建产物：`dist/family-insurance-manager-1.9.0-amd64.tar`（157,614,080 字节）
+- sha256: `d4623abf653230c59c20eb1171f645639a9306e5172e385fd115ff4730f1968d`
+- 镜像: `family-insurance-manager:1.9.0`
 
-> 想回滚到 v1.7：[v1.7.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.7.0)（`ffdf954b…`）。
+> 想回滚到 v1.8.1：[v1.8.1 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.1)（`c1467290…`）。
 
 > 仓库本身不存放大文件（GitHub 单文件上限 100 MB），**镜像统一发布到 Releases**。
 > 每个版本的 tar 作为对应 tag 的附件上传，下载后核对 sha256 再导入。
@@ -198,7 +254,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 五、API 概览
+## 六、API 概览
 
 所有接口位于 `/api` 前缀下，成功直接返回资源对象，错误统一返回
 `{ "code": "...", "message": "...", "detail": ... }`。
@@ -221,18 +277,25 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 | GET/PUT | `/api/stats/exclusions` | 读取 / 全量替换「不计入统计」排除配置 |
 | GET/PUT | `/api/notifications/settings` | 读取 / 部分更新通知配置（Webhook 回显已脱敏） |
 | POST | `/api/notifications/test` | 立即发送一条测试消息（不受开关 / 时间限制） |
+| GET | `/api/auth/status` | 访问密码状态（公开：是否启用 / 是否已登录） |
+| POST | `/api/auth/login` | 用访问密码登录（写入 HttpOnly Cookie；错 5 次限速） |
+| POST | `/api/auth/logout` | 退出登录（清除 Cookie，幂等） |
+| PUT | `/api/auth/password` | 设置 / 修改访问密码（已启用时须带 `currentPassword`） |
+| PUT | `/api/auth/enabled` | 开启 / 关闭访问密码（开启前必须已设密码） |
+
+> 除 `/api/health`、`/api/meta/enums` 与 `/api/auth/*` 外，其余接口在开启访问密码后都需要登录态，否则返回 `401 UNAUTHORIZED`。
 
 交互式接口文档：启动后访问 `/docs`（Swagger UI）。
 
 ---
 
-## 六、项目结构
+## 七、项目结构
 
 ```
 保险整理工具/
 ├── app/                # FastAPI 后端（routers / services / models / calc 分层）
 ├── static/             # 无构建前端（index.html + css + js）
-│   ├── js/views/       # dashboard / policies / members / settings 四视图
+│   ├── js/views/       # dashboard / policies / members / settings / login（登录闸门）
 │   ├── js/components/  # modal / policyForm / memberForm / batchEditModal …
 │   └── js/             # main(路由) / api / store / format / chart
 ├── tests/              # 后端测试（pytest）
@@ -240,11 +303,11 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 │   ├── insurance.db    # SQLite 数据库
 │   └── attachments/    # 电子保单 PDF
 ├── docs/               # PRD、架构文档与部署指南
-│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.8，为什么这么改都在这）
+│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.9，为什么这么改都在这）
 ├── scripts/            # 一键构建镜像并导出 tar（build-image.sh / .bat）
 ├── tools/offline-image-build/  # 无 Docker 组装镜像的脚本（step1~step5）
 ├── dist/               # 镜像 tar 产物
-│   └── family-insurance-manager-1.8.1-amd64.tar   # 已预构建好，可直接导入
+│   └── family-insurance-manager-1.9.0-amd64.tar   # 已预构建好，可直接导入
 ├── requirements.txt    # 运行依赖（== 锁定）
 ├── Dockerfile          # 单阶段镜像
 ├── docker-compose.yml        # 极空间运行用（只有 image:）
@@ -254,7 +317,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 七、开发与测试
+## 八、开发与测试
 
 ```bash
 # 安装开发依赖
@@ -268,7 +331,7 @@ pytest -q
 
 ---
 
-## 八、常见问题
+## 九、常见问题
 
 - **端口被占用**：设置 `PORT` 环境变量改用其他端口，或修改 `docker-compose.yml` 的端口映射。
 - **想重置数据**：停止服务后删除 `data/insurance.db`（数据库）与 `data/attachments/`（PDF 附件），下次启动会重新建表。
@@ -276,6 +339,9 @@ pytest -q
 - **收不到企业微信提醒**：先点「立即发送测试」——
   - 提示 `Webhook 地址无效或机器人已被移除` → 回群里重新复制地址；
   - 提示发送成功但群里没消息 → 检查机器人是否被移出群 / 群是否被折叠免打扰；
-  - **微信里只看到「暂不支持此消息类型，点击前往企业微信查看」** → 那是 v1.8.0 的老问题（当时发的是 markdown），升级到 **v1.8.1** 即好——现在发的是纯文本，微信里直接可读；
+  - **微信里只看到「暂不支持此消息类型，点击前往企业微信查看」** → 那是 v1.8.0 的老问题（当时发的是 markdown），升级到 **v1.8.1 及以上**（当前 v1.9.0）即好——现在发的是纯文本，微信里直接可读；
   - 测试能发、但到点没发 → 确认「启用每日提醒」已开、且**当天确实有**临近到期或待缴的保单（没有就不发空消息）；容器时区不对也会导致「到点」判断偏移，`docker-compose.yml` 已固定 `TZ=Asia/Shanghai`。
 - **改了提醒天数没生效**：保存后由后台任务在**下一个整分钟**重新判断，不会立刻补发当天消息（当天已发过就不再发）。
+- **忘了访问密码**：见 [四、访问密码 → 忘了密码怎么办](#忘了密码怎么办)。最快的是在 `docker-compose.yml` 里加 `AUTH_DISABLED=true` 重启，进去重设后再删掉。
+- **密码对却一直要求重新登录**：多半是用 `https` 之外的域名 / IP 混着访问——Cookie 是按域名存的，换个地址访问等于换个新会话。固定用同一个地址打开即可。
+- **开启访问密码后企业微信提醒还发吗**：发。提醒是服务端自己发出去的，和浏览器是否登录无关。

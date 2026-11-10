@@ -660,6 +660,47 @@ class NotifyTestOut(CamelModel):
     due: int = 0
 
 
+# ---------------------------------------------------------------------------
+# v1.9 访问密码
+# ---------------------------------------------------------------------------
+class AuthStatusOut(CamelModel):
+    """访问密码状态。
+
+    ``authenticated`` 表示「当前会话能否使用应用」——未启用密码时恒为 ``true``，
+    前端只需判断 ``enabled && !authenticated`` 决定是否显示登录页。
+    """
+
+    enabled: bool
+    password_set: bool
+    authenticated: bool
+    #: 环境变量 ``AUTH_DISABLED=true`` 强制关闭（前端据此提示「已临时关闭」）
+    forced_disabled: bool = False
+    session_days: int = 30
+
+
+class AuthLoginIn(CamelModel):
+    """登录请求体。"""
+
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AuthPasswordIn(CamelModel):
+    """设置 / 修改密码请求体。
+
+    - 首次设置（尚未启用访问限制）：``currentPassword`` 可缺省；
+    - 已启用：必须带上当前密码（路由层已要求登录，这里再核一次）。
+    """
+
+    new_password: str = Field(min_length=1, max_length=128)
+    current_password: Optional[str] = None
+
+
+class AuthEnabledIn(CamelModel):
+    """开启 / 关闭访问限制请求体。"""
+
+    enabled: bool
+
+
 __all__ = [
     "CamelModel",
     "MemberCreate",
@@ -689,4 +730,8 @@ __all__ = [
     "NotifySettingsIn",
     "NotifySettingsOut",
     "NotifyTestOut",
+    "AuthStatusOut",
+    "AuthLoginIn",
+    "AuthPasswordIn",
+    "AuthEnabledIn",
 ]

@@ -44,6 +44,11 @@ async function request(path, options = {}) {
   }
 
   if (!response.ok) {
+    // 401 = 未登录/登录过期：全局广播，由入口统一弹登录闸门。
+    // 登录接口本身除外——否则一次输错密码就重渲染登录页，把已输入的内容和错误提示一起冲掉。
+    if (response.status === 401 && path !== '/auth/login') {
+      window.dispatchEvent(new CustomEvent('app:unauthorized'));
+    }
     const err = data && typeof data === 'object' ? data : {};
     throw {
       code: err.code || `HTTP_${response.status}`,
@@ -247,6 +252,52 @@ export function saveNotifySettings(payload) {
  */
 export function sendNotifyTest() {
   return request('/notifications/test', { method: 'POST' });
+}
+
+// ---- 访问密码（v1.9）----
+
+/**
+ * 读取访问密码状态（公开接口，登录页本身也要先调它）。
+ * @returns {Promise<{enabled:boolean, passwordSet:boolean, authenticated:boolean,
+ *   forcedDisabled:boolean, sessionDays:number}>}
+ */
+export function getAuthStatus() {
+  return request('/auth/status');
+}
+
+/**
+ * 用访问密码登录；成功后服务端写入 HttpOnly Cookie（前端读不到，也不需要）。
+ * @param {string} password
+ * @returns {Promise<any>} 登录后的状态
+ */
+export function login(password) {
+  return request('/auth/login', { method: 'POST', body: { password } });
+}
+
+/**
+ * 退出登录（清除 Cookie）。
+ * @returns {Promise<{ok:boolean}>}
+ */
+export function logout() {
+  return request('/auth/logout', { method: 'POST' });
+}
+
+/**
+ * 设置 / 修改访问密码。
+ * @param {{newPassword: string, currentPassword?: string}} payload
+ * @returns {Promise<any>} 更新后的状态（同时已签发新的登录态）
+ */
+export function setAuthPassword(payload) {
+  return request('/auth/password', { method: 'PUT', body: payload });
+}
+
+/**
+ * 开启 / 关闭访问限制（开启前必须已设置密码）。
+ * @param {boolean} enabled
+ * @returns {Promise<any>} 更新后的状态
+ */
+export function setAuthEnabled(enabled) {
+  return request('/auth/enabled', { method: 'PUT', body: { enabled } });
 }
 
 export { BASE };

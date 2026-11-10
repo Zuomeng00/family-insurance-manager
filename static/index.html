@@ -26,7 +26,7 @@
       <button class="tab" type="button" data-route="#/dashboard">总览</button>
       <button class="tab" type="button" data-route="#/policies">保单列表</button>
       <button class="tab" type="button" data-route="#/members">家庭成员</button>
-      <button class="tab" type="button" data-route="#/settings">通知设置</button>
+      <button class="tab" type="button" data-route="#/settings">设置</button>
     </nav>
     <div class="topbar-actions">
       <button class="btn primary" type="button" id="btn-new-policy">+ 新增保单</button>
@@ -41,6 +41,9 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- 访问密码登录闸门（v1.9）：未登录时覆盖全屏，由 js/views/login.js 填充 -->
+  <div id="auth-gate" class="auth-gate" hidden></div>
 
   <script type="module" src="/js/main.js"></script>
 </body>

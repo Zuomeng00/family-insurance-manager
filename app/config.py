@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     - ``attachments_dir``             ← ``ATTACHMENTS_DIR``              （默认 ``./data/attachments``）
     - ``max_attachment_size``         ← ``MAX_ATTACHMENT_SIZE``          （默认 ``20971520``，即 20MB）
     - ``max_attachments_per_policy``  ← ``MAX_ATTACHMENTS_PER_POLICY``   （默认 ``10``）
+    - ``notification_scheduler``      ← ``NOTIFICATION_SCHEDULER``       （默认 ``true``）
+    - ``auth_session_days``           ← ``AUTH_SESSION_DAYS``            （默认 ``30``）
+    - ``auth_disabled``               ← ``AUTH_DISABLED``                （默认 ``false``；忘记密码的兜底开关）
     """
 
     model_config = SettingsConfigDict(
@@ -56,6 +59,12 @@ class Settings(BaseSettings):
     # ---- v1.8 消息通知 ----
     # 是否启用「每日提醒」后台任务（关掉后仍可手动点「发送测试」，便于排障）
     notification_scheduler: bool = True
+
+    # ---- v1.9 访问密码 ----
+    # 登录态有效期（天）：Cookie 与 token 同时生效，每次登录重新计算
+    auth_session_days: int = 30
+    # 兜底开关：设为 true 时**忽略**已设置的密码（忘了密码时改一行重启即可进入）
+    auth_disabled: bool = False
 
     @property
     def database_url(self) -> str:

@@ -17,7 +17,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -29,8 +29,9 @@ from . import __version__
 from . import models  # noqa: F401  # 确保 ORM 模型在 create_all 之前被导入注册
 from .config import settings
 from .database import Base, engine
+from .deps import require_auth
 from .errors import AppError
-from .routers import attachments, members, meta, notifications, policies, stats
+from .routers import attachments, auth, members, meta, notifications, policies, stats
 from .services import notification_service
 
 logger = logging.getLogger(__name__)
@@ -232,12 +233,18 @@ async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResp
 
 
 # ---- 注册 API 路由（顺序不影响功能，但必须早于静态挂载） ----
+# 公开路由：健康检查（Docker HEALTHCHECK 不能带密码）、枚举字典（无业务数据）、登录本身
 app.include_router(meta.router)
-app.include_router(members.router)
-app.include_router(policies.router)
-app.include_router(attachments.router)
-app.include_router(stats.router)
-app.include_router(notifications.router)
+app.include_router(auth.router)
+
+# 受访问密码保护的业务路由（v1.9）：统一在 include_router 上挂守卫，
+# 避免每个端点重复声明，也不会有「漏加一个」的缝隙。
+_PROTECTED = [Depends(require_auth)]
+app.include_router(members.router, dependencies=_PROTECTED)
+app.include_router(policies.router, dependencies=_PROTECTED)
+app.include_router(attachments.router, dependencies=_PROTECTED)
+app.include_router(stats.router, dependencies=_PROTECTED)
+app.include_router(notifications.router, dependencies=_PROTECTED)
 
 # ---- 静态资源挂载（务必放在所有 /api 路由之后，避免吞掉 API 请求） ----
 # check_dir=False：目录暂不存在时也不阻塞启动（前端下一批次实现）。

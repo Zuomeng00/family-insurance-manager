@@ -34,7 +34,7 @@ services:
         BASE_IMAGE: ${BASE_IMAGE:-python:3.13-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
         TZ: ${TZ:-Asia/Shanghai}
-    image: family-insurance-manager:1.8.1
+    image: family-insurance-manager:1.9.0
     container_name: family-insurance-manager
     hostname: family-insurance-manager
 

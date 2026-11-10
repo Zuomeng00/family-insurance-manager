@@ -24,7 +24,7 @@
 services:
   insurance-tool:
     # 导入到极空间的本镜像（导入后镜像名与此一致，不要改）
-    image: family-insurance-manager:1.8.1
+    image: family-insurance-manager:1.9.0
     container_name: family-insurance-manager
 
     ports:
@@ -40,6 +40,10 @@ services:
       DB_PATH: /app/data/insurance.db
       # 服务监听端口：与上方 ports 的【右边】保持一致
       PORT: "8000"
+      # 忘记访问密码时：把下面这行取消注释（去掉开头的 # ）并重启容器，
+      # 即可临时跳过密码直接进入，进去后到「设置 → 访问密码」重设密码，
+      # 再把这行的注释加回去重启一次。
+      # AUTH_DISABLED: "true"
 
     volumes:
       # ⚠️⚠️ 必须替换这一行 ⚠️⚠️

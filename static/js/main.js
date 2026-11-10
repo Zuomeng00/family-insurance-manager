@@ -2,10 +2,11 @@
  * 应用入口（T08）。
  *
  * 职责：
- * 1. 预加载枚举字典到 store（全局下拉框字典，只取一次）；
- * 2. 注册 hash 路由（`#/dashboard` 默认 / `#/policies` / `#/members` / `#/settings`）并分发到对应视图；
- * 3. 绑定全局按钮（顶栏 tab、"+ 新增保单"）；
- * 4. 监听 store 派发的应用级事件：
+ * 1. 先过「访问密码」闸门（v1.9）：未登录则只显示登录页，不通业务视图；
+ * 2. 预加载枚举字典到 store（全局下拉框字典，只取一次）；
+ * 3. 注册 hash 路由（`#/dashboard` 默认 / `#/policies` / `#/members` / `#/settings`）并分发到对应视图；
+ * 4. 绑定全局按钮（顶栏 tab、"+ 新增保单"）；
+ * 5. 监听 store 派发的应用级事件：
  *    - `app:toast`   → 渲染轻提示；
  *    - `app:refresh` → 重新渲染当前视图（写操作后数据同步）。
  */
@@ -18,6 +19,7 @@ import { render as renderDashboard } from './views/dashboard.js';
 import { render as renderPolicies } from './views/policies.js';
 import { render as renderMembers } from './views/members.js';
 import { render as renderSettings } from './views/settings.js';
+import { hideLoginGate, isLoginGateVisible, showLoginGate } from './views/login.js';
 
 /** 路由表：hash → { view 容器 id, render 渲染函数 }。 */
 const ROUTES = {
@@ -72,6 +74,9 @@ function updateTabs() {
 
 /** 按当前 hash 渲染对应视图。 */
 async function route() {
+  // 闸门挡着时不渲染：避免视图在遮罩后面一路 401 → 反复重绘登录页（会把已输入的密码冲掉）
+  if (isLoginGateVisible()) return;
+
   let hash = window.location.hash;
   if (!ROUTES[hash]) {
     // 空 hash 或非法 hash → 归一到默认路由（会再次触发 hashchange）
@@ -151,11 +156,36 @@ function bindGlobalEvents() {
   window.addEventListener('app:toast', (event) => {
     showToast(event.detail.message, event.detail.type);
   });
+  // 任何接口返回 401（登录过期 / Cookie 被清）→ 立刻拉回登录页
+  window.addEventListener('app:unauthorized', () => {
+    showLoginGate(bootApp);
+  });
 }
 
-/** 应用初始化。 */
-async function init() {
-  bindGlobalEvents();
+/**
+ * 访问密码闸门：未登录时不加载任何业务视图。
+ * @returns {Promise<boolean>} 是否可以继续启动应用
+ */
+async function ensureAccess() {
+  let status;
+  try {
+    status = await api.getAuthStatus();
+  } catch (error) {
+    // 后端不可达时不要假装「已登录」→ 也不假装「需要密码」，
+    // 直接放行让各视图显示自己的错误，比对着登录页输密码强。
+    showToast(error.message, 'error');
+    return true;
+  }
+  if (status.enabled && !status.authenticated) {
+    showLoginGate(bootApp);
+    return false;
+  }
+  hideLoginGate();
+  return true;
+}
+
+/** 真正启动应用：拉枚举 + 渲染当前路由。 */
+async function bootApp() {
   try {
     await store.ensureEnums();
   } catch (error) {
@@ -163,6 +193,13 @@ async function init() {
     showToast(error.message, 'error');
   }
   await route();
+}
+
+/** 应用初始化。 */
+async function init() {
+  bindGlobalEvents();
+  if (!(await ensureAccess())) return;
+  await bootApp();
 }
 
 init();

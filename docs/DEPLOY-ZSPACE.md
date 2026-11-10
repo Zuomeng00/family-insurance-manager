@@ -8,14 +8,14 @@
 ## 一、总览：三步走
 
 > ✅ **镜像已经打包好了，你不需要安装 Docker，也不需要自己构建。**
-> 成品就在项目里的 **`dist/family-insurance-manager-1.8.1-amd64.tar`**（150.3 MB），
+> 成品就在项目里的 **`dist/family-insurance-manager-1.9.0-amd64.tar`**（150.3 MB），
 > 直接做下面两步即可。
 
 ```
 ┌──────────────────────────────────┐
 │ 第 1 步：拿到 tar 文件             │
 │ dist/family-insurance-manager-   │
-│ 1.8.1-amd64.tar  ← 已经是成品     │
+│ 1.9.0-amd64.tar  ← 已经是成品     │
 └───────────────┬──────────────────┘
                 │  第 2 步：把 tar 上传到极空间
                 ▼
@@ -67,11 +67,11 @@
 
 | 项目 | 值 |
 |---|---|
-| 路径 | **项目根目录下 `dist/family-insurance-manager-1.8.1-amd64.tar`** |
+| 路径 | **项目根目录下 `dist/family-insurance-manager-1.9.0-amd64.tar`** |
 | 大小 | **150.3 MB**（157,573,120 字节） |
 | 平台 | **linux/amd64**（匹配 NAS 的 x86 CPU） |
-| SHA256 | `c1467290de2d739322e2b446e0b4ea3333ce38a462a9b04a9f736c48148ec534` |
-| 镜像名:标签 | `family-insurance-manager:1.8.1` |
+| SHA256 | `d4623abf653230c59c20eb1171f645639a9306e5172e385fd115ff4730f1968d` |
+| 镜像名:标签 | `family-insurance-manager:1.9.0` |
 | 镜像 ID | `sha256:ef22aa509e8a957ef958fdbd469fefb37b23794bc13b664182fd70f05c3be1ef` |
 
 **你不需要做任何事**，这个文件就是最终成品，直接进第 2 步。
@@ -108,9 +108,10 @@
 >
 > 现在的结构已与真实 `docker save` 逐项对齐，校验项从 97 项增加到 **106 项，全部通过**。
 >
-> **📌 当前版本 v1.8.1（2026-11-09）**：v1.8 镜像**沿用同一套已验证的正确结构**重新构建，同样 **106 项校验全部通过**。
-> 当前该用的文件是 **`family-insurance-manager-1.8.1-amd64.tar`**（SHA256 `c1467290…`，镜像 `family-insurance-manager:1.8.1`）。
-> 如果你手上还是 v1.8.0（`371e74e2…`，微信端看不到消息）、v1.7（`ffdf954b…`）或更早的，请换成 v1.8.1。
+> **📌 当前版本 v1.9.0（2026-11-10）**：新增**访问密码**（默认关闭，不需要可以完全不管），
+> 仍是同一套已验证的镜像结构，**106 项校验全部通过**；**不涉及任何数据结构变更**，`./data/` 原样挂进来即可。
+> 当前该用的文件是 **`family-insurance-manager-1.9.0-amd64.tar`**（SHA256 `d4623abf…`，镜像 `family-insurance-manager:1.9.0`）。
+> 如果你手上还是 v1.8.1（`c1467290…`）、v1.8.0（`371e74e2…`，微信端看不到消息）、v1.7（`ffdf954b…`）或更早的，请换成 v1.9.0。
 >
 > **升级到 v1.4 时**：本次**不涉及数据结构变更**（只改了看板口径），但**建议仍先备份 `./data/` 整个文件夹**。
 > 若你**从未装过 v1.3**（即从 v1.2 直接跳到 v1.4），则容器首次启动会自动完成 v1.3 引入的数据结构迁移
@@ -122,12 +123,12 @@
 
 **Windows（PowerShell）**
 ```powershell
-Get-FileHash dist\family-insurance-manager-1.8.1-amd64.tar -Algorithm SHA256
+Get-FileHash dist\family-insurance-manager-1.9.0-amd64.tar -Algorithm SHA256
 ```
 
 **macOS / Linux**
 ```bash
-shasum -a 256 dist/family-insurance-manager-1.8.1-amd64.tar
+shasum -a 256 dist/family-insurance-manager-1.9.0-amd64.tar
 ```
 
 输出应当与 3.1 表格里的 SHA256 **完全一致**。不一致就重新拷贝一次。
@@ -216,7 +217,7 @@ PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
 
 ```
 /zfs-pool/zspace-user/data/Docker/insurance/
-├── family-insurance-manager-1.8.1-amd64.tar   ← 上传到这里
+├── family-insurance-manager-1.9.0-amd64.tar   ← 上传到这里
 └── data/                                      ← 数据文件夹（首次会自动生成）
 ```
 
@@ -235,21 +236,21 @@ PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
 Docker → 镜像 → 本地镜像 → 导入镜像 → 从极空间导入 → 选中第 2 步上传的 tar 包 → 确定
 ```
 
-导入成功后，镜像列表里会出现 **`family-insurance-manager:1.8.1`**。
+导入成功后，镜像列表里会出现 **`family-insurance-manager:1.9.0`**。
 
 > **⚠️ 报「任务添加失败」怎么办？**
 >
 > 先说结论：**这个报错的真实成因在 2026-09-17 已定位并修复到 Docker 源码级别**（见 3.1 节的修复说明）——
 > 初版 tar 的 `history` 非空条目数（11）**多于**层数（6），`docker load` 会直接报
 > `too many non-empty layers in History section`。
-> **请确认你用的是 v1.8.1 的 tar（SHA256 以 `c1467290…` 开头）再试。**
+> **请确认你用的是 v1.9.0 的 tar（SHA256 以 `d4623abf…` 开头）再试。**
 >
 > 如果换了新文件**仍然**失败，按下面顺序排查（每一步都会排除一类原因）：
 >
 > | 排查动作 | 说明 |
 > |---|---|
 > | ① 确认文件完整 | 在极空间上核对文件大小必须是 **157,573,120 字节**（150.3 MB）。SMB 拷贝中断是「任务添加失败」最常见的原因，文件小一点就是没传完。 |
-> | ② 确认文件名没被改 | 必须是 `family-insurance-manager-1.8.1-amd64.tar`。有些网盘/下载器会加 `(1)`、`.txt` 等后缀，导入器按后缀判断就会拒绝。 |
+> | ② 确认文件名没被改 | 必须是 `family-insurance-manager-1.9.0-amd64.tar`。有些网盘/下载器会加 `(1)`、`.txt` 等后缀，导入器按后缀判断就会拒绝。 |
 > | ③ 确认存放位置 | 换到**根目录或纯英文路径**（例如 `Docker/insurance/`）再试。路径里含中文或特殊字符时，个别固件会读取失败。 |
 > | ④ 确认 Docker 功能已开 | 【设置】→【通用】→【开发者选项】里打开 Docker 并**重启 NAS**。Docker 引擎没起来时，任何导入都会「任务添加失败」。 |
 > | ⑤ 换一种导入入口 | 如果「从极空间导入」不行，试试把 tar 放在 NAS 后走「**从本地上传**」（如果有这个选项）。 |
@@ -279,7 +280,7 @@ Compose 全文（就是项目里 `docker-compose.yml` 的核心，**只有一处
 ```yaml
 services:
   insurance-tool:
-    image: family-insurance-manager:1.8.1
+    image: family-insurance-manager:1.9.0
     container_name: family-insurance-manager
     ports:
       - "8000:8000"
@@ -391,7 +392,7 @@ docker inspect --format '{{.State.Health.Status}}' family-insurance-manager  # �
    > 5 个脚本重新组装一份（依次跑 step1→step5），产物同样是 `dist/*.tar`。
 
 2. 把新的 tar 重新上传到 NAS（自建的是 `dist/family-insurance-manager-1.3.0.tar`，
-   无 Docker 组装的是 `dist/family-insurance-manager-1.8.1-amd64.tar`）。
+   无 Docker 组装的是 `dist/family-insurance-manager-1.9.0-amd64.tar`）。
 3. 极空间 **Docker → 镜像 → 导入**，覆盖导入（若提示已存在，先删除旧镜像再导入）。
 4. 极空间 **Docker → Compose → 找到项目 → 重新部署 / 重启**。
 5. 数据仍在 `data/`（数据库 `insurance.db` + PDF 附件 `attachments/`），无需任何迁移。

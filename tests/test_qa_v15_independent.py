@@ -383,7 +383,7 @@ def test_a5_dual_role_member_own_and_others(client) -> None:
 def test_d_version_is_1_7_0() -> None:
     import app
 
-    assert app.__version__ == "1.8.1"
+    assert app.__version__ == "1.9.0"
 
 
 def test_d_money_fields_are_json_numbers(client, seed_example_a) -> None:
