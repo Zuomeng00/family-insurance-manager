@@ -661,6 +661,284 @@ class NotifyTestOut(CamelModel):
 
 
 # ---------------------------------------------------------------------------
+# v1.10 保障责任（条款级拆解）
+# ---------------------------------------------------------------------------
+class CoverageIn(CamelModel):
+    """一条保障责任（录入用）。
+
+    金额一律按**元**传（与保费口径一致），落库时由 ``Money`` 转「分」。
+    ``amount`` 与 ``ratio`` 可二选一或并存：医疗险多是固定限额，
+    重疾险多是「基本保额的 N%」。
+    """
+
+    category: str
+    name: str = Field(min_length=1, max_length=40)
+    amount: Optional[Decimal] = None
+    ratio: Optional[int] = None
+    times: Optional[int] = None
+    deductible: Optional[Decimal] = None
+    note: Optional[str] = Field(default=None, max_length=120)
+
+
+class CoverageOut(CoverageIn):
+    """一条保障责任（响应）。"""
+
+    id: str
+    sort_order: int = 0
+
+    @field_serializer("amount", "deductible")
+    def _money_to_number(self, value: Optional[Decimal]) -> Optional[float]:
+        return None if value is None else float(value)
+
+
+class CoverageListOut(CamelModel):
+    """一张保单的责任项列表。"""
+
+    policy_id: str
+    items: list[CoverageOut] = []
+    #: 该险种的预置模板（前端「按模板填充」用；与 items 并列返回可少一次请求）
+    templates: list[CoverageIn] = []
+    categories: list[str] = []
+
+
+class CoverageReplaceIn(CamelModel):
+    """全量替换请求体。"""
+
+    items: list[CoverageIn] = []
+
+
+# ---------------------------------------------------------------------------
+# v1.10 保单托管报告
+# ---------------------------------------------------------------------------
+# 说明：报告是**每次请求现算**的，没有任何存档表；这里的 Schema 只负责把
+# service 层的 dict 固化成对外契约（金额一律 float、日期一律 ISO 字符串）。
+class ReportParamsIn(CamelModel):
+    """报告测算参数（部分更新）。
+
+    - **键缺省** = 不改；
+    - **传 ``null``** = 清空该字段（用户在输入框里删空了）；
+    - 数值单位：**元**。
+    """
+
+    annual_income: Optional[Decimal] = Field(default=None, ge=0, le=10**10)
+    total_debt: Optional[Decimal] = Field(default=None, ge=0, le=10**10)
+    annual_expense: Optional[Decimal] = Field(default=None, ge=0, le=10**10)
+
+
+class ReportParamsOut(CamelModel):
+    annual_income: Optional[float] = None
+    total_debt: Optional[float] = None
+    annual_expense: Optional[float] = None
+    #: 是否填了年收入（决定额度缺口算不算）
+    filled: bool = False
+
+
+class ReportMetaOut(CamelModel):
+    report_no: str
+    generated_at: datetime
+    #: 保单 / 责任 / 成员三张表的最新修改时间，前端据此判断数据是否已变
+    data_updated_at: Optional[datetime] = None
+    version: str
+    family_name: str
+
+
+class ReportOverviewOut(CamelModel):
+    member_count: int
+    policy_count: int
+    active_count: int
+    #: 真正计入保障合计的保单数（状态正常且在保障期内）
+    in_force_count: int = 0
+    #: 已过保障期但状态仍为「生效中」
+    expired_count: int = 0
+    #: 已退保 / 已失效
+    ended_count: int = 0
+    annual_premium: float = 0.0
+    #: 给付型保额合计（重疾 + 身故全残 + 意外，**不含医疗**）
+    total_sum_insured: float = 0.0
+    #: 保费负担率 = 年化保费 / 家庭年收入（未填收入为 null）
+    premium_ratio: Optional[float] = None
+    coverage_recorded: int = 0
+    coverage_missing: int = 0
+
+
+class ReportDiagnosisOut(CamelModel):
+    """诊断小结的一条（自动生成的自然语言结论）。"""
+
+    #: ``warn`` 需要处理 / ``good`` 没问题 / ``info`` 说明性
+    tone: str = "info"
+    title: str
+    text: str
+
+
+class ReportCoverageItemOut(CamelModel):
+    name: str
+    category: str
+    amount: Optional[float] = None
+    ratio: Optional[int] = None
+    times: Optional[int] = None
+    deductible: Optional[float] = None
+    note: Optional[str] = None
+    #: 折算后的实际金额（``amount`` 优先，否则 ``ratio`` × 保额）；无金额为 null
+    effective_amount: Optional[float] = None
+
+
+class ReportPolicyBriefOut(CamelModel):
+    """成员页里的「某张保单保了什么」。"""
+
+    policy_id: str
+    product_name: str
+    company: str
+    insurance_type: str
+    status: str
+    #: 是否录过保障责任（false = 报告中按险种粗算）
+    recorded: bool = False
+    items: list[ReportCoverageItemOut] = []
+
+
+class ReportCellOut(CamelModel):
+    category: str
+    amount: Optional[float] = None
+    has: bool = False
+
+
+class ReportAmountGapOut(CamelModel):
+    #: 归属成员（后端按成员逐个测算，前端表格的第一列）
+    member_name: str = ""
+    item: str
+    current: float
+    suggested: float
+    gap: float
+    severity: str
+    #: 测算口径说明（如未成年人按监管上限、共保保单需核对份额）
+    note: Optional[str] = None
+
+
+class ReportMemberOut(CamelModel):
+    member_id: str
+    name: str
+    relation: str
+    age: Optional[int] = None
+    policy_count: int = 0
+    #: 作为共同被保人、但保额记在主被保人名下的保单数
+    shared_policy_count: int = 0
+    annual_premium: float = 0.0
+    sum_by_category: dict[str, Optional[float]] = {}
+    cells: list[ReportCellOut] = []
+    structure_gaps: list[str] = []
+    #: 共保提示（保障记在其他成员为主被保人的保单上，需核对本人份额）
+    shared_notes: list[str] = []
+    amount_gaps: list[ReportAmountGapOut] = []
+    policies: list[ReportPolicyBriefOut] = []
+
+
+class ReportPremiumRowOut(CamelModel):
+    name: str
+    amount: float
+    ratio: float
+
+
+class ReportMonthPremiumOut(CamelModel):
+    month: int
+    amount: float
+
+
+class ReportPremiumOut(CamelModel):
+    by_member: list[ReportPremiumRowOut] = []
+    by_type: list[ReportPremiumRowOut] = []
+    #: 全年 12 个月的保费支出分布（月缴平摊、年缴落在生效月，Σ = 年化合计）
+    by_month: list[ReportMonthPremiumOut] = []
+
+
+class ReportPolicyRowOut(CamelModel):
+    id: str
+    product_name: str
+    company: str
+    insurance_type: str
+    status: str
+    policyholder_name: str
+    insured_names: list[str] = []
+    effective_date: date
+    coverage_end_date: Optional[date] = None
+    annualized_premium: float = 0.0
+    insured_amount: Optional[float] = None
+    paid_periods: int = 0
+    total_periods: int = 0
+    next_due_date: Optional[date] = None
+    coverage_count: int = 0
+    #: 是否计入保障与保费合计
+    counted: bool = False
+    #: 已过保障期但状态仍为「生效中」
+    expired: bool = False
+
+
+class ReportPaymentItemOut(CamelModel):
+    policy_id: str
+    product_name: str
+    company: str
+    due_date: date
+    period_index: int
+    amount: float
+
+
+class ReportPaymentPlanOut(CamelModel):
+    items: list[ReportPaymentItemOut] = []
+    total: float = 0.0
+    horizon_days: int = 365
+
+
+class ReportExpiringOut(CamelModel):
+    policy_id: str
+    product_name: str
+    company: str
+    coverage_end_date: date
+    days_left: int
+
+
+class ReportExpiredOut(CamelModel):
+    policy_id: str
+    product_name: str
+    company: str
+    coverage_end_date: date
+    days_ago: int
+    status: str
+
+
+class ReportStructureGapOut(CamelModel):
+    member_name: str
+    message: str
+    severity: str
+
+
+class ReportGapsOut(CamelModel):
+    structure: list[ReportStructureGapOut] = []
+    amount: list[ReportAmountGapOut] = []
+
+
+class ReportActionOut(CamelModel):
+    priority: str
+    title: str
+    detail: str
+
+
+class ReportOut(CamelModel):
+    meta: ReportMetaOut
+    params: ReportParamsOut
+    overview: ReportOverviewOut
+    #: 诊断小结（服务端按数据自动生成，导出 Word 复用同一份文字）
+    diagnosis: list[ReportDiagnosisOut] = []
+    matrix_categories: list[str] = []
+    members: list[ReportMemberOut] = []
+    premium: ReportPremiumOut
+    policies: list[ReportPolicyRowOut] = []
+    payment_plan: ReportPaymentPlanOut
+    expiring: list[ReportExpiringOut] = []
+    expired: list[ReportExpiredOut] = []
+    gaps: ReportGapsOut
+    actions: list[ReportActionOut] = []
+    warnings: list[str] = []
+
+
+# ---------------------------------------------------------------------------
 # v1.9 访问密码
 # ---------------------------------------------------------------------------
 class AuthStatusOut(CamelModel):
@@ -730,6 +1008,32 @@ __all__ = [
     "NotifySettingsIn",
     "NotifySettingsOut",
     "NotifyTestOut",
+    "CoverageIn",
+    "CoverageOut",
+    "CoverageListOut",
+    "CoverageReplaceIn",
+    "ReportParamsIn",
+    "ReportParamsOut",
+    "ReportMetaOut",
+    "ReportOverviewOut",
+    "ReportDiagnosisOut",
+    "ReportCoverageItemOut",
+    "ReportPolicyBriefOut",
+    "ReportCellOut",
+    "ReportAmountGapOut",
+    "ReportMemberOut",
+    "ReportPremiumRowOut",
+    "ReportMonthPremiumOut",
+    "ReportPremiumOut",
+    "ReportPolicyRowOut",
+    "ReportPaymentItemOut",
+    "ReportPaymentPlanOut",
+    "ReportExpiringOut",
+    "ReportExpiredOut",
+    "ReportStructureGapOut",
+    "ReportGapsOut",
+    "ReportActionOut",
+    "ReportOut",
     "AuthStatusOut",
     "AuthLoginIn",
     "AuthPasswordIn",

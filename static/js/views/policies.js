@@ -19,6 +19,7 @@ import * as api from '../api.js';
 import * as store from '../store.js';
 import { fmtMoney, fmtDate, escapeHtml, fmtInsuredNames, insuredTitle } from '../format.js';
 import { openModal, confirmModal } from '../components/modal.js';
+import { openCoverageEditor } from '../components/coverageModal.js';
 import { createPolicyForm } from '../components/policyForm.js';
 import { openBatchEdit } from '../components/batchEditModal.js';
 import { createAttachmentList } from '../components/attachmentList.js';
@@ -174,6 +175,7 @@ function tableHtml(rows, annualSum, paidSum, selected) {
         <td>
           <div class="row-actions">
             <button class="btn small" type="button" data-action="edit" data-id="${escapeHtml(p.id)}">编辑</button>
+            <button class="btn small" type="button" data-action="coverage" data-id="${escapeHtml(p.id)}" title="逐条录入条款责任，托管报告才够准">责任</button>
             <button class="btn small" type="button" data-action="contact" data-id="${escapeHtml(p.id)}">联系方式</button>
             <button class="btn small danger" type="button" data-action="delete" data-id="${escapeHtml(p.id)}">删除</button>
           </div>
@@ -343,6 +345,7 @@ export async function render(container) {
         const policy = (store.get('policies') || []).find((p) => p.id === id);
         if (!policy) return;
         if (action === 'edit') openEdit(enums, members, policy);
+        else if (action === 'coverage') openCoverageEditor(policy);
         else if (action === 'contact') openContact(policy);
         else if (action === 'attachments') openAttachmentPicker(policy);
         else if (action === 'delete') removePolicy(policy);

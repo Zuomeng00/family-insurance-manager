@@ -27,6 +27,7 @@ import gzip
 import hashlib
 import io
 import json
+import glob
 import os
 import shutil
 import sys
@@ -35,16 +36,38 @@ import tempfile
 
 WORK = os.environ.get("IMGBUILD_WORK") or os.path.join(tempfile.gettempdir(), "_imgbuild")
 BASE = os.path.join(WORK, "base")
-DEPS = os.path.join(WORK, "layer_deps")
+
+
+def _resolve_deps() -> str:
+    """定位 step2 的产物目录。
+
+    step2 在 ``layer_deps`` 已存在时会改用 ``layer_deps-<HHMMSS>``（本机沙箱不允许删旧目录），
+    若这里还死读 ``layer_deps``，就会把**上一版**的依赖层打进镜像——
+    表现为「代码更新了、新依赖却没进镜像」，运行期才 ImportError。
+    因此按「最后修改时间最新」挑选，并允许 ``IMGBUILD_DEPS`` 显式指定。
+    """
+    explicit = os.environ.get("IMGBUILD_DEPS")
+    if explicit:
+        return explicit
+    base = os.path.join(WORK, "layer_deps")
+    candidates = [base] + sorted(glob.glob(base + "-*"))
+    existing = [path for path in candidates if os.path.isdir(path) and os.listdir(path)]
+    if not existing:
+        return base
+    return max(existing, key=os.path.getmtime)
+
+
+DEPS = _resolve_deps()
+print("依赖层目录:", DEPS)
 REPO = os.environ.get("IMGBUILD_REPO") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
 OUT_DIR = os.path.join(REPO, "dist")
-OUT_TAR = os.path.join(OUT_DIR, "family-insurance-manager-1.9.0-amd64.tar")
+OUT_TAR = os.path.join(OUT_DIR, "family-insurance-manager-1.10.0-amd64.tar")
 TMP = os.path.join(WORK, "tmp")
 
 IMAGE_REF = "family-insurance-manager"
-IMAGE_TAG = "1.9.0"
+IMAGE_TAG = "1.10.0"
 EPOCH = 1758038400  # 固定 mtime，保证可复现
 SP = "usr/local/lib/python3.13/site-packages"
 PYBIN = "/usr/local/bin/python3.13"

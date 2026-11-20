@@ -254,8 +254,53 @@ export function sendNotifyTest() {
   return request('/notifications/test', { method: 'POST' });
 }
 
-// ---- 访问密码（v1.9）----
+// ---- 保障责任（v1.10）----
 
+/**
+ * 读取一张保单的责任明细（含该险种的预置模板）。
+ * @param {string} policyId
+ * @returns {Promise<{policyId:string, items:Array, templates:Array, categories:string[]}>}
+ */
+export function getCoverages(policyId) {
+  return request(`/policies/${encodeURIComponent(policyId)}/coverages`);
+}
+
+/**
+ * **全量替换**一张保单的责任明细（传空数组 = 清空）。
+ * @param {string} policyId
+ * @param {Array<object>} items
+ * @returns {Promise<any>} 保存后的列表
+ */
+export function saveCoverages(policyId, items) {
+  return request(`/policies/${encodeURIComponent(policyId)}/coverages`, {
+    method: 'PUT',
+    body: { items },
+  });
+}
+
+// ---- 托管报告（v1.10）----
+
+/**
+ * 读取托管报告所需的全部数据。
+ * @returns {Promise<any>}
+ */
+export function getReport() {
+  return request('/report');
+}
+
+/**
+ * 保存报告参数（家庭年收入 / 负债余额 / 年生活支出，单位：元）。
+ * @param {{annualIncome?:number, totalDebt?:number, annualExpense?:number}} payload
+ * @returns {Promise<any>} 更新后的报告数据
+ */
+export function saveReportParams(payload) {
+  return request('/report/params', { method: 'PUT', body: payload });
+}
+
+/** Word 报告下载地址（直接给 `<a href>` / `location.href` 用）。 */
+export const REPORT_DOCX_URL = `${BASE}/report/export.docx`;
+
+// ---- 访问密码（v1.9）----
 /**
  * 读取访问密码状态（公开接口，登录页本身也要先调它）。
  * @returns {Promise<{enabled:boolean, passwordSet:boolean, authenticated:boolean,

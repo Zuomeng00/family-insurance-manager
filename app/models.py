@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
 from .enums import (
+    CoverageCategory,
     CoverageTermType,
     Gender,
     InsuranceType,
@@ -53,6 +54,11 @@ def new_policy_id() -> str:
 def new_attachment_id() -> str:
     """生成附件主键：``a_`` + 12 位十六进制。"""
     return "a_" + uuid.uuid4().hex[:12]
+
+
+def new_coverage_id() -> str:
+    """生成保障责任主键：``cv_`` + 12 位十六进制。"""
+    return "cv_" + uuid.uuid4().hex[:12]
 
 
 def _now() -> datetime:
@@ -245,6 +251,54 @@ class PolicyAttachment(Base):
         )
 
 
+class PolicyCoverage(Base):
+    """保单的保障责任明细（v1.10）。
+
+    「条款级责任拆解」的落点：把「重疾 100%、中症 60%×2、轻症 30%×3」
+    这样的条款拆成一条条可汇总的记录，而不是只留一个笼统的「保额」。
+
+    - ``amount`` 与 ``ratio`` 可**二选一或并存**：医疗险多为固定限额（``amount``），
+      重疾险多为「基本保额的 N%」（``ratio``）；并存时 ``amount`` 视为已折算的实际金额，优先使用；
+    - ``deductible`` 免赔额只对报销型（医疗）有意义，其余留空；
+    - ``times`` 赔付次数，留空 = 未约定 / 不限；
+    - 外键 ``ON DELETE CASCADE``：删除保单时责任项由数据库自动连带删除。
+
+    迁移：新表由 ``create_all`` 自动创建，**无需**登记 ``_ADDITIVE_COLUMNS``、
+    **无需**回填（老保单就是「没录责任」这个合法状态）。
+    """
+
+    __tablename__ = "policy_coverages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_coverage_id)
+    policy_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("policies.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    category: Mapped[CoverageCategory] = mapped_column(
+        SAEnum(CoverageCategory, native_enum=False, length=12, values_callable=_values),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    amount: Mapped[Optional[object]] = mapped_column(Money, nullable=True, default=None)
+    ratio: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    times: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    deductible: Mapped[Optional[object]] = mapped_column(Money, nullable=True, default=None)
+    note: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, default=None)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
+
+    __table_args__ = (Index("idx_coverages_policy", "policy_id"),)
+
+    def __repr__(self) -> str:  # pragma: no cover - 调试用
+        return (
+            f"<PolicyCoverage id={self.id!r} policy_id={self.policy_id!r} "
+            f"name={self.name!r} category={self.category!r}>"
+        )
+
+
 class StatsExclusion(Base):
     """统计排除配置（v1.7）。
 
@@ -301,9 +355,11 @@ __all__ = [
     "Policy",
     "PolicyInsured",
     "PolicyAttachment",
+    "PolicyCoverage",
     "StatsExclusion",
     "AppSetting",
     "new_member_id",
     "new_policy_id",
     "new_attachment_id",
+    "new_coverage_id",
 ]

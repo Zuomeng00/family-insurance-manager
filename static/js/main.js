@@ -18,6 +18,7 @@ import { createPolicyForm } from './components/policyForm.js';
 import { render as renderDashboard } from './views/dashboard.js';
 import { render as renderPolicies } from './views/policies.js';
 import { render as renderMembers } from './views/members.js';
+import { render as renderReport } from './views/report.js';
 import { render as renderSettings } from './views/settings.js';
 import { hideLoginGate, isLoginGateVisible, showLoginGate } from './views/login.js';
 
@@ -26,6 +27,8 @@ const ROUTES = {
   '#/dashboard': { view: 'view-dashboard', render: renderDashboard },
   '#/policies': { view: 'view-policies', render: renderPolicies },
   '#/members': { view: 'view-members', render: renderMembers },
+  // 报告是文档形态：没有「新增保单」这个上下文，且每次进入都重新拉数（v1.10）
+  '#/report': { view: 'view-report', render: renderReport, hideNewPolicy: true },
   '#/settings': { view: 'view-settings', render: renderSettings, hideNewPolicy: true },
 };
 

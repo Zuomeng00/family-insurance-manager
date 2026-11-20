@@ -86,6 +86,34 @@ class Gender(str, Enum):
     unknown = "未知"
 
 
+class CoverageCategory(str, Enum):
+    """保障责任类别（v1.10）。
+
+    这是「条款级责任拆解」的落点：一张保单的保额往往不是单一数字，
+    重疾赔 100%、中症赔 60%×2、轻症赔 30%×3，混在一起会把缺口算错。
+    因此每条责任单独记类别，汇总时**只把同类可加总的项相加**。
+    """
+
+    critical = "重大疾病"
+    medium = "中症"
+    minor = "轻症"
+    death = "身故全残"
+    medical = "医疗"
+    accident = "意外"
+    annuity = "年金"
+    waiver = "保费豁免"
+    other = "其他"
+
+
+#: 可**加总**为「给付型保额」的责任类别（重疾 / 寿险 / 意外伤残）。
+#: 医疗险是报销型，限额不能叠加，只能取最大值——混在一起算会得出荒谬的总额。
+SUMMABLE_CATEGORIES: tuple[str, ...] = (
+    CoverageCategory.critical.value,
+    CoverageCategory.death.value,
+    CoverageCategory.accident.value,
+)
+
+
 # 关系展示排序权重（本人 0 → 其他 5）
 RELATION_ORDER: dict[str, int] = {
     Relation.self_.value: 0,
@@ -105,6 +133,8 @@ __all__ = [
     "PaymentFrequency",
     "Relation",
     "Gender",
+    "CoverageCategory",
+    "SUMMABLE_CATEGORIES",
     "RELATION_ORDER",
     "_values",
 ]

@@ -12,3 +12,9 @@ openpyxl==3.1.5
 
 # --- P1（v1.2）：文件上传表单解析（纯 Python，无编译依赖，容器内离线可装） ---
 python-multipart==0.0.20
+
+# --- v1.10：保单托管报告导出 Word ---
+# python-docx 依赖 lxml（有 manylinux / musllinux wheel，离线可装，无需编译）。
+# 这是本项目首次引入非纯 Python 依赖；Dockerfile 的离线 wheel 目录需同步补入。
+python-docx==1.2.0
+lxml==6.1.3

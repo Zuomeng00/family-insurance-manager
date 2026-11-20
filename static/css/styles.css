@@ -601,6 +601,60 @@ body.auth-locked .content { display: none; }
 .pwd-hint { margin: 12px 0 0; }
 #pwd-error { margin-top: 8px; }
 
+/* ---------- 保障责任录入（v1.10） ---------- */
+.modal.modal-wide { max-width: 1060px; }
+
+.cvg-editor { display: flex; flex-direction: column; gap: 10px; }
+.cvg-tip {
+  margin: 0; padding: 8px 10px;
+  font-size: 12.5px; line-height: 1.6; color: var(--text-muted);
+  background: #f4f8ff; border: 1px solid #dbe6fb; border-radius: 8px;
+}
+.cvg-tip strong { color: var(--primary-dark); }
+
+.cvg-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.cvg-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 780px; }
+.cvg-table th {
+  padding: 7px 8px; text-align: left; white-space: nowrap;
+  font-weight: 500; color: var(--text-muted); background: #f7f9fc;
+  border-bottom: 1px solid var(--border);
+}
+.cvg-table td { padding: 4px 6px; border-bottom: 1px solid #eef1f6; }
+.cvg-table tr:last-child td { border-bottom: 0; }
+.cvg-table input, .cvg-table select {
+  width: 100%; padding: 5px 7px;
+  font-size: 12.5px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; background: #fff;
+}
+.cvg-table input:focus, .cvg-table select:focus {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(47, 111, 235, .12);
+}
+.cvg-col-num { width: 78px; }
+.cvg-col-cat { width: 96px; }
+.cvg-col-note { min-width: 140px; }
+.cvg-col-op { width: 34px; }
+.cvg-del {
+  width: 24px; height: 24px; line-height: 1; padding: 0;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: #fff; color: var(--text-muted); cursor: pointer; font-size: 15px;
+}
+.cvg-del:hover { color: var(--danger); border-color: #f2c1c1; background: #fff5f5; }
+
+.cvg-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.cvg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cvg-total {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--text-muted);
+}
+.cvg-total strong { font-size: 16px; color: var(--primary-dark); }
+.cvg-total-detail { color: var(--text-muted); font-size: 12px; }
+.cvg-total-hint { color: #9aa2ad; }
+.cvg-hint { margin: 0; font-size: 11.5px; line-height: 1.6; color: #98a1ac; }
+
 /* ---------- 响应式 ---------- */
 
 /* 中等宽度（平板 / 窄窗口）：6 张卡片折成 2 列 × 3 行（无孤行） */
@@ -683,3 +737,261 @@ body.auth-locked .content { display: none; }
   .pie-svg { max-width: 100%; height: auto; }
 }
 
+
+/* ============================================================================
+ * 保单托管报告（v1.10）
+ * 文档形态：A4 打印友好，页面上就是"一份报告"，不是一个看板。
+ * ==========================================================================*/
+.view-report { max-width: 1020px; margin: 0 auto; }
+
+.report-doc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 40px 40px;
+}
+
+/* ---------- 工具条（打印隐藏） ---------- */
+.report-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 12px 16px; margin: -8px 0 24px;
+  background: #f4f7fe; border: 1px solid #dbe6fb; border-radius: 8px;
+}
+.report-toolbar-note { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-muted); }
+.report-toolbar-note strong { font-size: 13px; color: var(--text); }
+.report-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- 抬头 ---------- */
+.report-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 24px; padding-bottom: 20px; border-bottom: 2px solid var(--text);
+  margin-bottom: 28px;
+}
+.report-head h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .5px; }
+.report-sub { margin: 0; font-size: 12px; color: var(--text-muted); }
+.report-stamp {
+  flex: 0 0 auto; text-align: center; padding: 8px 14px;
+  border: 1px solid var(--border); border-radius: 6px; background: #fafbfd;
+}
+.report-stamp-main { display: block; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: var(--primary-dark); }
+.report-stamp-sub { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* ---------- 警示 ---------- */
+.report-warnings {
+  border-left: 3px solid #f0b429; background: #fffbf0;
+  padding: 10px 14px; margin-bottom: 24px; border-radius: 0 6px 6px 0;
+}
+.report-warnings p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.6; color: #7a5200; }
+.report-warnings p:last-child { margin-bottom: 0; }
+
+/* ---------- 章节 ---------- */
+.report-section { margin-bottom: 32px; }
+.report-section h2 {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 16px; font-size: 17px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sec-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--primary); color: #fff; font-size: 12px; font-weight: 600;
+}
+.sub-title { margin: 20px 0 10px; font-size: 13.5px; color: var(--text); font-weight: 600; }
+.report-section h3.sub-title:first-of-type { margin-top: 8px; }
+
+/* ---------- 指标卡 ---------- */
+.report-doc .metric-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.report-doc .metric-card { padding: 14px; }
+/* 金额不能被折行成「¥37,448.」+「00」 */
+.report-doc .metric-value { font-size: 17px; white-space: nowrap; }
+
+/* ---------- 保障矩阵 ---------- */
+.matrix-wrap { overflow-x: auto; }
+.matrix-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.matrix-table th, .matrix-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.matrix-table th { background: #fafbfd; color: var(--text-muted); font-weight: 600; text-align: center; white-space: nowrap; }
+.matrix-table th:first-child, .matrix-table td:first-child { text-align: left; }
+.matrix-name { font-weight: 600; white-space: nowrap; }
+.matrix-relation { display: block; font-weight: 400; font-size: 11.5px; color: var(--text-muted); }
+.matrix-cell { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.matrix-cell.is-missing { color: #c3cad6; }
+.matrix-total { font-weight: 600; color: var(--primary-dark); }
+.matrix-empty { text-align: center; color: var(--text-muted); padding: 24px; }
+.table-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); }
+.empty-line { margin: 6px 0; font-size: 13px; color: var(--text-muted); }
+
+/* ---------- 缺口 ---------- */
+.param-form {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  padding: 14px; background: #f8fafd; border: 1px solid var(--border); border-radius: 8px;
+}
+.param-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.param-form input {
+  width: 160px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+}
+.param-form input:focus { outline: 2px solid #c7d9fb; border-color: var(--primary); }
+.param-hint { margin: 10px 0 0; font-size: 11.5px; line-height: 1.75; color: var(--text-muted); }
+.gap-amount { color: #c92a2a; font-weight: 600; }
+.cell-note { font-size: 11.5px; color: var(--text-muted); }
+
+.structure-list { margin: 0; padding: 0; list-style: none; }
+.structure-list li { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; font-size: 13px; border-bottom: 1px dashed var(--border); }
+.structure-list li:last-child { border-bottom: none; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.dot-high { background: #e8590c; }
+.dot-medium { background: #f0b429; }
+
+/* ---------- 成员块 ---------- */
+.member-block { border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; }
+.member-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.member-name { font-size: 16px; font-weight: 600; }
+.member-meta { margin-left: 8px; font-size: 12px; color: var(--text-muted); }
+.member-total { font-size: 12px; color: var(--text-muted); }
+.member-total strong { font-size: 15px; color: var(--primary-dark); }
+
+.cover-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cover-chip {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 5px 10px; font-size: 12px; border-radius: 20px;
+  background: #eef4ff; color: var(--primary-dark); border: 1px solid #dbe6fb;
+}
+.cover-chip strong { font-size: 12.5px; }
+
+.member-gaps { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.8; }
+.structure-warn { color: #b23c00; }
+.structure-note { color: var(--text-muted); }
+
+.member-policy { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.member-policy-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.member-policy-name { font-size: 13px; font-weight: 600; }
+.member-policy-meta { font-size: 11.5px; color: var(--text-muted); }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mini-table th, .mini-table td { padding: 6px 8px; border-bottom: 1px solid #f0f2f6; text-align: left; }
+.mini-table th { color: var(--text-muted); font-weight: 600; background: #fcfdff; }
+.mini-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- 月份柱 ---------- */
+.month-bars { display: flex; align-items: flex-end; gap: 6px; height: 132px; margin: 6px 0 4px; }
+.month-bar { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; height: 100%; min-width: 0; }
+.month-bar-track { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; }
+.month-bar-fill { width: 100%; min-height: 2px; background: linear-gradient(180deg, #5b8ff9, #2f6feb); border-radius: 3px 3px 0 0; }
+.month-bar-label { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
+.month-bar-value { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+/* ---------- 表格补充 ---------- */
+.report-doc .data-table { font-size: 12.5px; }
+.report-doc .data-table th, .report-doc .data-table td { padding: 7px 9px; }
+.report-doc .data-table tfoot td { font-weight: 600; background: #fafbfd; border-top: 2px solid var(--border); }
+.row-muted td { color: #9aa4b2; }
+.tag-warn { display: inline-block; padding: 1px 6px; font-size: 10.5px; border-radius: 4px; background: #fff0f0; color: #c92a2a; }
+
+/* ---------- 行动清单 ---------- */
+.action-list { margin: 0; padding: 0; list-style: none; }
+.action-list li { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.action-list li:last-child { border-bottom: none; }
+.action-tag { flex: 0 0 auto; align-self: flex-start; padding: 2px 8px; font-size: 11px; border-radius: 4px; white-space: nowrap; }
+.p-high .action-tag { background: #fff0f0; color: #c92a2a; }
+.p-medium .action-tag { background: #fff8e6; color: #96650a; }
+.p-low .action-tag { background: #eef2f7; color: var(--text-muted); }
+.action-title { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+.action-detail { margin: 0; font-size: 12px; line-height: 1.7; color: var(--text-muted); }
+
+/* ---------- 口径说明 ---------- */
+.report-notes .notes-list { margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.9; color: #4b5563; }
+
+.report-loading { padding: 60px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+.report-error { padding: 40px 0; text-align: center; }
+.report-error p { color: var(--danger); margin-bottom: 14px; }
+
+/* ---------- A4 打印 ---------- */
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+
+  html, body { background: #fff; font-size: 11.5px; }
+  .topbar, .no-print, #toast, #auth-gate, .modal-backdrop { display: none !important; }
+  .content { max-width: none; margin: 0; padding: 0; }
+  .view-report { max-width: none; }
+  .report-doc { border: none; box-shadow: none; border-radius: 0; padding: 0; }
+
+  .report-head { margin-bottom: 18px; }
+  .report-head h1 { font-size: 20px; }
+  .report-section { margin-bottom: 20px; break-inside: auto; }
+  .report-section h2 { font-size: 15px; margin-bottom: 10px; }
+
+  /* 成员块 / 保单行尽量不要被拦腰切断 */
+  .member-block, .action-list li, .matrix-table tr, .report-doc .data-table tr,
+  .report-warnings, .cover-chip, .month-bars { break-inside: avoid; }
+
+  /* 章节之间允许分页，但标题后不留孤行 */
+  h2, h3 { break-after: avoid; }
+
+  .report-doc .metric-row { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .report-doc .metric-card { padding: 10px; border: 1px solid #ddd; box-shadow: none; }
+  .report-doc .metric-value { font-size: 16px; }
+  .month-bars { height: 96px; }
+
+  /* 表格跨页时重复表头 */
+  thead { display: table-header-group; }
+  tfoot { display: table-row-group; }
+  .table-scroll, .matrix-wrap { overflow: visible !important; }
+}
+
+/* 只在打印 / 存 PDF 时出现的内容（封面摘要等） */
+.print-only { display: none; }
+
+@media print {
+  /* 封面页：抬头独占第一页，纵向居中，读完再翻页 */
+  .report-head {
+    break-after: page;
+    display: block;
+    border-bottom: none;
+    padding-top: 70mm;
+    margin-bottom: 0;
+  }
+  .report-head h1 { font-size: 26px; margin-bottom: 10px; }
+  .report-sub { font-size: 10px; }
+  .report-stamp { display: none; }
+
+  .print-only { display: block; }
+  .cover-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 26px 0 0; }
+  .cover-summary > div {
+    border: 1px solid #cfd8e3; border-radius: 6px; padding: 10px 12px; background: #f7fafb;
+  }
+  .cover-summary span { display: block; font-size: 9px; color: #6b7280; }
+  .cover-summary strong { display: block; font-size: 14px; color: #0e5e6b; margin-top: 3px; }
+  .cover-note { margin-top: 30px; font-size: 9.5px; line-height: 1.9; color: #6b7280; }
+
+  /* 每章另起一页：正式报告的分页习惯，也让 10–12 页的体量成立 */
+  .report-section { break-before: page; page-break-before: always; }
+
+  /* 正文略放大，A4 上更好读 */
+  html, body { font-size: 12px; }
+  .report-doc .data-table { font-size: 10.5px; }
+  .report-doc .data-table th, .report-doc .data-table td { padding: 6px 8px; }
+  .matrix-table { font-size: 11px; }
+  .mini-table { font-size: 10.5px; }
+}
+
+/* ---------- 诊断小结 ---------- */
+.diag-list { margin: 0; padding: 0; list-style: none; }
+.diag-item {
+  padding: 10px 14px; margin-bottom: 10px; border-radius: 0 6px 6px 0;
+  border-left: 3px solid var(--border); background: #fbfcfe;
+}
+.diag-item:last-child { margin-bottom: 0; }
+.diag-warn { border-left-color: #e8590c; background: #fffaf5; }
+.diag-good { border-left-color: #0b7a55; background: #f5fbf8; }
+.diag-info { border-left-color: var(--primary); background: #f7f9ff; }
+.diag-title { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+.diag-text { margin: 0; font-size: 12.5px; line-height: 1.75; color: #4b5563; }
+
+@media print {
+  .diag-item { break-inside: avoid; }
+  .diag-text { font-size: 10.5px; }
+}
+
+.premium-ratio { margin: 0 0 14px; padding: 9px 12px; font-size: 12.5px;
+  background: #f4f7fe; border: 1px solid #dbe6fb; border-radius: 6px; color: #334155; }

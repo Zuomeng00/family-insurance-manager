@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from ..deps import get_db
 from ..enums import InsuranceType, PaymentFrequency, PolicyStatus
 from ..schemas import (
+    CoverageIn,
+    CoverageListOut,
+    CoverageOut,
+    CoverageReplaceIn,
     FieldSuggestionsOut,
     PolicyBatchUpdateIn,
     PolicyBatchUpdateOut,
@@ -17,7 +21,7 @@ from ..schemas import (
     PolicyOut,
     PolicyUpdate,
 )
-from ..services import policy_service
+from ..services import coverage_service, policy_service
 
 router = APIRouter(prefix="/api/policies", tags=["policies"])
 
@@ -105,3 +109,44 @@ def delete_policy(policy_id: str, db: Session = Depends(get_db)) -> dict[str, ob
 
 
 __all__ = ["router"]
+
+
+# ---------------------------------------------------------------------------
+# v1.10 保障责任（条款级拆解）
+# ---------------------------------------------------------------------------
+@router.get("/{policy_id}/coverages", response_model=CoverageListOut)
+def list_coverages(policy_id: str, db: Session = Depends(get_db)) -> CoverageListOut:
+    """读取一张保单的责任明细，并附带**该险种**的预置模板。
+
+    模板与明细一起返回，前端打开录入弹窗只需一次请求。
+    """
+    policy = coverage_service.require_policy(db, policy_id)
+    return CoverageListOut(
+        policy_id=policy_id,
+        items=[
+            CoverageOut.model_validate(item)
+            for item in coverage_service.list_for_policy(db, policy_id)
+        ],
+        templates=[
+            CoverageIn(**item)
+            for item in coverage_service.template_for(policy.insurance_type.value)
+        ],
+        categories=coverage_service.categories(),
+    )
+
+
+@router.put("/{policy_id}/coverages", response_model=CoverageListOut)
+def save_coverages(
+    policy_id: str,
+    payload: CoverageReplaceIn,
+    db: Session = Depends(get_db),
+) -> CoverageListOut:
+    """**全量替换**一张保单的责任明细。
+
+    不做逐条 diff：前端就是一张可增删的表格，整体覆盖不会出现
+    「删了没删掉、改了一半」的中间态。传空数组 = 清空。
+    """
+    coverage_service.replace_all(
+        db, policy_id, [item.model_dump() for item in payload.items]
+    )
+    return list_coverages(policy_id, db)

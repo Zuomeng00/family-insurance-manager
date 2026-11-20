@@ -31,7 +31,7 @@ from .config import settings
 from .database import Base, engine
 from .deps import require_auth
 from .errors import AppError
-from .routers import attachments, auth, members, meta, notifications, policies, stats
+from .routers import attachments, auth, members, meta, notifications, policies, report, stats
 from .services import notification_service
 
 logger = logging.getLogger(__name__)
@@ -244,6 +244,7 @@ app.include_router(members.router, dependencies=_PROTECTED)
 app.include_router(policies.router, dependencies=_PROTECTED)
 app.include_router(attachments.router, dependencies=_PROTECTED)
 app.include_router(stats.router, dependencies=_PROTECTED)
+app.include_router(report.router, dependencies=_PROTECTED)
 app.include_router(notifications.router, dependencies=_PROTECTED)
 
 # ---- 静态资源挂载（务必放在所有 /api 路由之后，避免吞掉 API 请求） ----

@@ -33,6 +33,16 @@
 
 ![登录页](docs/screenshots/demo/login.png)
 
+**保单托管报告（v1.10）** — 一份能直接拿给人看的家庭保障检视报告：成员 × 保障矩阵、
+缺口测算、逐人分析、交费计划；数据实时聚合，可导出 Word 或打印成 PDF
+
+![保单托管报告](docs/screenshots/demo/report.png)
+
+**保障责任录入（v1.10）** — 把「重疾 100%、中症 60%×2、轻症 30%×3」拆成一条条，
+报告的缺口分析才算得准；按险种一键套模板
+
+![保障责任录入](docs/screenshots/demo/coverage.png)
+
 ### 能力清单
 
 | 模块 | 能力 |
@@ -44,6 +54,8 @@
 | 批量编辑 | 列表多选后一次性更新售后信息，**只覆盖显式填写的字段**（留空 = 不改，另可显式「设为空」） |
 | 电子保单 PDF | 上传 / 在线查看 / 下载 / 删除 PDF 附件，随保单归档；单文件 ≤20MB、每张保单 ≤10 个 |
 | 消息提醒 | **企业微信机器人**每日推送一条汇总消息（纯文本，**微信里也能直接看**）：保障即将到期（可设提前天数）+ 缴费临近 / 已逾期；可自定义发送时间，当天只发一次 |
+| 保障责任 | 每张保单可按条款录入责任明细（类别 / 比例 / 金额 / 次数 / 免赔额 / 备注），**按险种一键套模板**；重疾、身故、意外可加总为给付型保额，医疗限额单列 |
+| 保单托管报告 | 九章完整报告：保障总览矩阵、缺口分析（结构 + 额度）、诊断小结、成员逐人、保费分布、保单汇总、12 个月交费计划、行动清单、测算口径；**每次打开实时聚合**，可导出 Word / 打印 PDF |
 | 访问密码 | 可选开启：打开网址先输密码；密码 PBKDF2 加盐哈希存储、登录态为 HttpOnly Cookie（30 天）、登错 5 次限速 5 分钟；**默认关闭**，忘了密码可用环境变量兜底 |
 | 计算口径 | 年化保费、总缴费期数、已缴期数、累计已缴、剩余期数、是否缴清、缴费进度、是否在保、下次缴费日 |
 
@@ -189,7 +201,66 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 ---
 
-## 五、Docker 部署
+## 五、保单托管报告（v1.10）
+
+**保单列表 → 每行「责任」** 先录责任，**顶栏「保单托管报告」** 出报告。
+
+### 报告长什么样
+
+九章，A4 竖版，打印/导出约 10–12 页：
+
+| 章节 | 内容 |
+|---|---|
+| 一 保障总览 | 5 张指标卡 + 成员 × 保障类别矩阵（重疾 / 医疗 / 意外 / 身故全残 / 年金 + 给付合计） |
+| 二 保障缺口分析 | 3 个参数算额度缺口；结构缺口（谁没有重疾 / 医疗 / 意外）自动列出 |
+| 三 诊断小结 | 把数字翻译成人话：覆盖情况、保费负担率、身故责任是否盖住负债、数据完整性 |
+| 四 成员保障分析 | 逐人：已有什么、缺什么、每张保单的责任明细 |
+| 五 保费分布 | 按投保人 / 按险种 / 12 个月支出节奏 + 保费负担率 |
+| 六 保单汇总 | 全字段明细，未计入合计的保单灰显并标注原因 |
+| 七 交费计划 | 未来 12 个月逐期待缴，含合计 |
+| 八 行动清单 | 按优先级排序：已过期 → 30 天内到期 → 逾期 → 结构缺口 → 额度缺口 → 补录责任 |
+| 九 测算口径与说明 | 口径、排除项、免责，白纸黑字写在报告里 |
+
+### 为什么是「实时聚合」而不是生成存档
+
+保单会新增、会到期、会退保，用户也会补录责任。所以 `/api/report` **每次请求现算**：
+
+- 不建报告表、不缓存、不存快照；
+- 顶部会显示「数据更新于 …」，数据一变，点「重新生成」立刻更新；
+- 导出的 Word 与页面用的是**同一次聚合结果**，不会出现「页面已变、文档还是旧的」。
+
+### 三个测算参数
+
+设置一次即可，随时改：
+
+| 参数 | 用来算什么 |
+|---|---|
+| 家庭年收入 | 重疾参考值（3 倍，不低于 30 万）、意外参考值（5 倍，不低于 50 万）、保费负担率（5%–15%） |
+| 负债余额 | 寿险参考值 = 负债 + 5 × 年生活支出 |
+| 年生活支出 | 同上 |
+
+> 只填年收入也能出结论；不填就只做结构缺口，不会拿 0 当收入算出「你已经够了」。
+> 参考值是行业通行经验值，**不是监管标准**，报告里也这么写。
+
+### 口径（容易被问到的四件事）
+
+1. **只有「生效中 / 已缴清」且在保障期内的保单**计入保障与保费。已退保、已失效、
+   已过期（状态没改）都不计，并在报告里单独提示——过期还写「生效中」是最容易自欺的情况。
+2. **医疗是报销限额，不参与「总保额」加总**。200 万 + 400 万 ≠ 600 万，取最大值。
+3. **多被保人保单的保额记在主被保人名下**。夫妻共保的定寿，条款里各自保额常分列，
+   一个字段还原不了；归主被保人 + 明确写「请核对本人份额」，好过虚构一个缺口。
+4. **没录责任的保单按险种粗算**（重疾险的保额记作重疾保障……），并在封面和脚注提示补录。
+
+### 导出
+
+- **打印 / 存为 PDF**：浏览器原生打印（`Ctrl+P`），已排好 A4 分页——封面独占首页、
+  每章另起一页、表格跨页重复表头；打印时工具条与按钮自动隐藏。
+- **导出 Word**：`GET /api/report/export.docx`，蓝绿配色、页脚页码，9 个章节一张不缺。
+  Word 由 `python-docx` 生成（本项目唯一一个非纯 Python 依赖，离线镜像里已带 wheel）。
+
+---
+
+## 六、Docker 部署
 
 ### 极空间 NAS 部署
 
@@ -197,13 +268,13 @@ Webhook 里的 key 就是发消息的凭证，因此做了三层保护：
 
 **镜像已经打包好并发布到本仓库的 Release**（无需安装 Docker）：
 
-- 下载：**[v1.9.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.9.0)**
-  → 附件 `family-insurance-manager-1.9.0-amd64.tar`（150.3 MB，linux/amd64）
-- 本地构建产物：`dist/family-insurance-manager-1.9.0-amd64.tar`（157,614,080 字节）
-- sha256: `d4623abf653230c59c20eb1171f645639a9306e5172e385fd115ff4730f1968d`
-- 镜像: `family-insurance-manager:1.9.0`
+- 下载：**[v1.10.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.10.0)**
+  → 附件 `family-insurance-manager-1.10.0-amd64.tar`（163.1 MB，linux/amd64）
+- 本地构建产物：`dist/family-insurance-manager-1.10.0-amd64.tar`（171,028,480 字节）
+- sha256: `70af59de85a5967acd2512c2a0216f958f2bb19a85c579b037ec42b2fc18c9ef`
+- 镜像: `family-insurance-manager:1.10.0`
 
-> 想回滚到 v1.8.1：[v1.8.1 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.8.1)（`c1467290…`）。
+> 想回滚到 v1.9.0：[v1.9.0 Release](https://github.com/Zuomeng00/family-insurance-manager/releases/tag/v1.9.0)（`d4623abf…`，157,614,080 字节）。
 
 > 仓库本身不存放大文件（GitHub 单文件上限 100 MB），**镜像统一发布到 Releases**。
 > 每个版本的 tar 作为对应 tag 的附件上传，下载后核对 sha256 再导入。
@@ -254,7 +325,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 六、API 概览
+## 七、API 概览
 
 所有接口位于 `/api` 前缀下，成功直接返回资源对象，错误统一返回
 `{ "code": "...", "message": "...", "detail": ... }`。
@@ -273,6 +344,10 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 | POST/GET | `/api/policies/{id}/attachments` | 附件上传（multipart `files`）/ 列表 |
 | DELETE | `/api/policies/{id}/attachments/{attId}` | 删除单个附件 |
 | GET | `/api/policies/{id}/attachments/{attId}/content` | 附件查看 / 下载（`?disposition=inline\|attachment`，默认 `inline`） |
+| GET/PUT | `/api/policies/{id}/coverages` | 读取责任明细（含该险种模板）/ **全量替换** |
+| GET | `/api/report` | 生成托管报告（**每次现算**，不缓存） |
+| PUT | `/api/report/params` | 保存测算参数（未传的键不改，传 `null` 清空） |
+| GET | `/api/report/export.docx` | 导出 Word（与页面同一份现算结果） |
 | GET | `/api/stats/dashboard` | 看板聚合数据（可选 `today=YYYY-MM-DD`） |
 | GET/PUT | `/api/stats/exclusions` | 读取 / 全量替换「不计入统计」排除配置 |
 | GET/PUT | `/api/notifications/settings` | 读取 / 部分更新通知配置（Webhook 回显已脱敏） |
@@ -289,25 +364,25 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 七、项目结构
+## 八、项目结构
 
 ```
 保险整理工具/
 ├── app/                # FastAPI 后端（routers / services / models / calc 分层）
 ├── static/             # 无构建前端（index.html + css + js）
-│   ├── js/views/       # dashboard / policies / members / settings / login（登录闸门）
-│   ├── js/components/  # modal / policyForm / memberForm / batchEditModal …
+│   ├── js/views/       # dashboard / policies / members / report / settings / login（登录闸门）
+│   ├── js/components/  # modal / policyForm / memberForm / coverageModal / batchEditModal …
 │   └── js/             # main(路由) / api / store / format / chart
 ├── tests/              # 后端测试（pytest）
 ├── data/               # 运行期数据目录（数据库 + 附件，运行时生成）
 │   ├── insurance.db    # SQLite 数据库
 │   └── attachments/    # 电子保单 PDF
 ├── docs/               # PRD、架构文档与部署指南
-│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.9，为什么这么改都在这）
+│   └── DEVELOPMENT-HISTORY.md   # 开发全过程记录（v1.0→v1.10，为什么这么改都在这）
 ├── scripts/            # 一键构建镜像并导出 tar（build-image.sh / .bat）
 ├── tools/offline-image-build/  # 无 Docker 组装镜像的脚本（step1~step5）
 ├── dist/               # 镜像 tar 产物
-│   └── family-insurance-manager-1.9.0-amd64.tar   # 已预构建好，可直接导入
+│   └── family-insurance-manager-1.10.0-amd64.tar  # 已预构建好，可直接导入
 ├── requirements.txt    # 运行依赖（== 锁定）
 ├── Dockerfile          # 单阶段镜像
 ├── docker-compose.yml        # 极空间运行用（只有 image:）
@@ -317,7 +392,7 @@ docker compose down             # 停止并移除容器（数据仍保留在 ./d
 
 ---
 
-## 八、开发与测试
+## 九、开发与测试
 
 ```bash
 # 安装开发依赖
@@ -331,7 +406,7 @@ pytest -q
 
 ---
 
-## 九、常见问题
+## 十、常见问题
 
 - **端口被占用**：设置 `PORT` 环境变量改用其他端口，或修改 `docker-compose.yml` 的端口映射。
 - **想重置数据**：停止服务后删除 `data/insurance.db`（数据库）与 `data/attachments/`（PDF 附件），下次启动会重新建表。
@@ -339,7 +414,7 @@ pytest -q
 - **收不到企业微信提醒**：先点「立即发送测试」——
   - 提示 `Webhook 地址无效或机器人已被移除` → 回群里重新复制地址；
   - 提示发送成功但群里没消息 → 检查机器人是否被移出群 / 群是否被折叠免打扰；
-  - **微信里只看到「暂不支持此消息类型，点击前往企业微信查看」** → 那是 v1.8.0 的老问题（当时发的是 markdown），升级到 **v1.8.1 及以上**（当前 v1.9.0）即好——现在发的是纯文本，微信里直接可读；
+  - **微信里只看到「暂不支持此消息类型，点击前往企业微信查看」** → 那是 v1.8.0 的老问题（当时发的是 markdown），升级到 **v1.8.1 及以上**（当前 v1.10.0）即好——现在发的是纯文本，微信里直接可读；
   - 测试能发、但到点没发 → 确认「启用每日提醒」已开、且**当天确实有**临近到期或待缴的保单（没有就不发空消息）；容器时区不对也会导致「到点」判断偏移，`docker-compose.yml` 已固定 `TZ=Asia/Shanghai`。
 - **改了提醒天数没生效**：保存后由后台任务在**下一个整分钟**重新判断，不会立刻补发当天消息（当天已发过就不再发）。
 - **忘了访问密码**：见 [四、访问密码 → 忘了密码怎么办](#忘了密码怎么办)。最快的是在 `docker-compose.yml` 里加 `AUTH_DISABLED=true` 重启，进去重设后再删掉。

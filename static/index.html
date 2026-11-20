@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>家庭保险整理工具</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=1.10.0">
 </head>
 <body>
   <header class="topbar">
@@ -26,6 +26,7 @@
       <button class="tab" type="button" data-route="#/dashboard">总览</button>
       <button class="tab" type="button" data-route="#/policies">保单列表</button>
       <button class="tab" type="button" data-route="#/members">家庭成员</button>
+      <button class="tab" type="button" data-route="#/report">保单托管报告</button>
       <button class="tab" type="button" data-route="#/settings">设置</button>
     </nav>
     <div class="topbar-actions">
@@ -37,6 +38,7 @@
     <section id="view-dashboard" class="view" hidden></section>
     <section id="view-policies" class="view" hidden></section>
     <section id="view-members" class="view" hidden></section>
+    <section id="view-report" class="view view-report" hidden></section>
     <section id="view-settings" class="view" hidden></section>
   </main>
 
@@ -45,6 +47,6 @@
   <!-- 访问密码登录闸门（v1.9）：未登录时覆盖全屏，由 js/views/login.js 填充 -->
   <div id="auth-gate" class="auth-gate" hidden></div>
 
-  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="/js/main.js?v=1.10.0"></script>
 </body>
 </html>
